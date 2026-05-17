@@ -30,13 +30,23 @@ class CreateTaskController(QObject):
         self._main_window = main_window
 
     def handle(self) -> None:
-        from PySide6.QtWidgets import QWidget
+        from PySide6.QtWidgets import QDialog, QWidget
         parent_widget = self._main_window if isinstance(self._main_window, QWidget) else None
         dialog = NewTaskDialog(parent_widget)
-        if dialog.exec() != NewTaskDialog.DialogCode.Accepted:
-            return
+        persisted = [False]
 
-        data = dialog.get_data()
+        def submit(data: dict) -> bool:
+            persisted[0] = True
+            return self._persist(data, parent_widget)
+
+        dialog.submit_handler = submit
+        result = dialog.exec()
+        # Compatibilidade com fakes legados que retornam Accepted sem invocar submit_handler.
+        if result == QDialog.DialogCode.Accepted and not persisted[0]:
+            self._persist(dialog.get_data(), parent_widget)
+
+    def _persist(self, data: dict, parent_widget) -> bool:
+        # US-020 c3: retornar False mantem dialog aberto pra nova tentativa.
         all_tasks = self._repo.list_active()
         all_tasks_dict = {t.id: t for t in all_tasks}
 
@@ -45,7 +55,7 @@ class CreateTaskController(QObject):
             task_id = generate_id(conn)
         except RuntimeError as exc:
             ErrorDialog.show_io_error(parent_widget, exc, "")
-            return
+            return False
 
         clean_deps, cycle_desc = resolve_cycles(task_id, data["deps"], all_tasks_dict)
 
@@ -64,7 +74,7 @@ class CreateTaskController(QObject):
             self._repo.create(task)
         except sqlite3.Error as exc:
             ErrorDialog.show_io_error(parent_widget, exc, "")
-            return
+            return False
         finally:
             QApplication.restoreOverrideCursor()
 
@@ -76,3 +86,4 @@ class CreateTaskController(QObject):
             )
 
         self._task_list.refresh(self._repo.list_active())
+        return True

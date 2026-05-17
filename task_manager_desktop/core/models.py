@@ -27,7 +27,7 @@ class Sector(IntEnum):
             1: "Em andamento",
             2: "A fazer",
             3: "Bloqueada",
-            4: "Concluida",
+            4: "Concluída",
         }
         return _LABELS[self.value]
 

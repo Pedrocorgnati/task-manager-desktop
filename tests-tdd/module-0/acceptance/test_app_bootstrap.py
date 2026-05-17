@@ -1,6 +1,7 @@
 # @tdd-locked: do not edit without /tdd:unlock
 # Suite: acceptance | Module: module-0-foundations | Task: TASK-1
 # TIDs: TID-0-1-012, TID-0-1-013, TID-0-1-014, TID-0-1-015, TID-0-1-016
+import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -44,6 +45,10 @@ class TestMainWindowShellFirstRun:
 class TestMainWindowShellRestoreGeometry:
     """TID-0-1-013 | covers: TASK-1/ST004 BDD#2 | suite: acceptance"""
 
+    @pytest.mark.skipif(
+        os.environ.get("QT_QPA_PLATFORM") == "offscreen",
+        reason="Geometry persistence requer display real (resize nao e aplicado em offscreen)",
+    )
     def test_run_subsequente_restaura_geometry_1600x1000(self, qtbot):
         from task_manager_desktop.ui.main_window import MainWindowShell
 

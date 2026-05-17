@@ -40,7 +40,7 @@ class TestEnums:
         assert Sector(1).label_pt() == "Em andamento"
         assert Sector(2).label_pt() == "A fazer"
         assert Sector(3).label_pt() == "Bloqueada"
-        assert Sector(4).label_pt() == "Concluida"
+        assert Sector(4).label_pt() == "Concluída"
 
     def test_sector_has_exactly_4_values(self):
         assert len(list(Sector)) == 4

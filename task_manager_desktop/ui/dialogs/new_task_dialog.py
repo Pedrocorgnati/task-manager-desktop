@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -11,6 +13,10 @@ from task_manager_desktop.ui.dialogs.task_form_widget import TaskFormWidget
 
 
 class NewTaskDialog(QDialog):
+    # US-020: submit_handler permite persistir sem fechar o dialog.
+    # Retorna True em sucesso (dialog fecha), False em erro de I/O (dialog permanece aberto).
+    submit_handler: Callable[[dict], bool] | None = None
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setMinimumWidth(480)
@@ -67,10 +73,22 @@ class NewTaskDialog(QDialog):
         return self.form._title_error
 
     def _on_accept(self) -> None:
-        if self.form.validate():
-            self.accept()
-        else:
+        if not self.form.validate():
             self.form.title_input.setFocus()
+            return
+        if self.submit_handler is None:
+            # Legacy: testes diretos / chamadas sem controller.
+            self.accept()
+            return
+        # US-020: desabilita OK, persiste, fecha so em sucesso.
+        self.set_ok_enabled(False)
+        try:
+            success = bool(self.submit_handler(self.form.get_data()))
+        finally:
+            if not success:
+                self.set_ok_enabled(True)
+        if success:
+            self.accept()
 
     def get_data(self) -> dict:
         return self.form.get_data()

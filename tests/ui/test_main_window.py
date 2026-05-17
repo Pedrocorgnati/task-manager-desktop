@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 import pytest
 from PySide6.QtCore import QCoreApplication, QSettings, QSize
 from PySide6.QtGui import QAction, QKeySequence
@@ -65,6 +67,10 @@ def test_set_right_widget_replaces_empty_state(qtbot):
     assert w._splitter.widget(1) is new_widget
 
 
+@pytest.mark.skipif(
+    os.environ.get("QT_QPA_PLATFORM") == "offscreen",
+    reason="Geometry persistence requer display real (resize nao e aplicado em offscreen)",
+)
 def test_qsettings_persistence(qtbot):
     w1 = MainWindowShell()
     qtbot.addWidget(w1)

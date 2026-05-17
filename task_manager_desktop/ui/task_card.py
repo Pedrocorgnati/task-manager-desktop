@@ -140,7 +140,7 @@ class TaskCard(QFrame):
             "QPushButton:hover { background: #3F3F46; color: #FAFAFA; }"
         )
         self._menu_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._menu_btn.setAccessibleName(f"Abrir menu de opcoes da task {self._task.id}")
+        self._menu_btn.setAccessibleName(f"Abrir menu de opções da task {self._task.id}")
         self._menu_btn.clicked.connect(self._show_context_menu)
         right_meta.addWidget(self._menu_btn)
 

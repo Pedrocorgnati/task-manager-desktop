@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -12,6 +14,9 @@ from task_manager_desktop.ui.dialogs.task_form_widget import TaskFormWidget
 
 
 class EditTaskDialog(QDialog):
+    # US-020: hook que mantem dialog aberto em erro de I/O.
+    submit_handler: Callable[[dict], bool] | None = None
+
     def __init__(self, task: Task, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._task = task
@@ -61,10 +66,20 @@ class EditTaskDialog(QDialog):
         return self.form.deps_input
 
     def _on_accept(self) -> None:
-        if self.form.validate():
-            self.accept()
-        else:
+        if not self.form.validate():
             self.form.title_input.setFocus()
+            return
+        if self.submit_handler is None:
+            self.accept()
+            return
+        self.set_ok_enabled(False)
+        try:
+            success = bool(self.submit_handler(self.form.get_data()))
+        finally:
+            if not success:
+                self.set_ok_enabled(True)
+        if success:
+            self.accept()
 
     def get_data(self) -> dict:
         return self.form.get_data()

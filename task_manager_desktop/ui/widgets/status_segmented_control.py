@@ -40,7 +40,7 @@ class StatusSegmentedControl(QWidget):
         _accessible_names = {
             Status.PENDING: "Status Pendente",
             Status.IN_PROGRESS: "Em progresso",
-            Status.DONE: "Concluida",
+            Status.DONE: "Concluída",
         }
         self._buttons: dict[Status, QPushButton] = {}
         for label, status in self._STATUS_VALUES:
