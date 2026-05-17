@@ -1,0 +1,374 @@
+{
+  "module": "module-1-gestao-de-tasks",
+  "generated_at": "2026-05-17T06:11:54Z",
+  "generator": "/tdd:create-suite",
+  "suites": [
+    {
+      "tid": "TID-1-1-001",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-001"
+    },
+    {
+      "tid": "TID-1-1-002",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-002"
+    },
+    {
+      "tid": "TID-1-1-003",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-003"
+    },
+    {
+      "tid": "TID-1-1-004",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-004"
+    },
+    {
+      "tid": "TID-1-1-005",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-005"
+    },
+    {
+      "tid": "TID-1-1-006",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-006"
+    },
+    {
+      "tid": "TID-1-1-007",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-007"
+    },
+    {
+      "tid": "TID-1-1-008",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-008"
+    },
+    {
+      "tid": "TID-1-1-009",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-009"
+    },
+    {
+      "tid": "TID-1-1-010",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-010"
+    },
+    {
+      "tid": "TID-1-1-011",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-011"
+    },
+    {
+      "tid": "TID-1-1-012",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-012"
+    },
+    {
+      "tid": "TID-1-1-013",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-013"
+    },
+    {
+      "tid": "TID-1-1-014",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-014"
+    },
+    {
+      "tid": "TID-1-1-015",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-015"
+    },
+    {
+      "tid": "TID-1-1-016",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-016"
+    },
+    {
+      "tid": "TID-1-1-017",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-017"
+    },
+    {
+      "tid": "TID-1-1-018",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-018"
+    },
+    {
+      "tid": "TID-1-1-019",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-019"
+    },
+    {
+      "tid": "TID-1-1-020",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-020"
+    },
+    {
+      "tid": "TID-1-1-021",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-021"
+    },
+    {
+      "tid": "TID-1-1-022",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-022"
+    },
+    {
+      "tid": "TID-1-1-023",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-023"
+    },
+    {
+      "tid": "TID-1-1-024",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-024"
+    },
+    {
+      "tid": "TID-1-1-025",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-1-025"
+    },
+    {
+      "tid": "TID-1-2-001",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-001"
+    },
+    {
+      "tid": "TID-1-2-002",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-002"
+    },
+    {
+      "tid": "TID-1-2-003",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-003"
+    },
+    {
+      "tid": "TID-1-2-004",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-004"
+    },
+    {
+      "tid": "TID-1-2-005",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-005"
+    },
+    {
+      "tid": "TID-1-2-006",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-006"
+    },
+    {
+      "tid": "TID-1-2-007",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-007"
+    },
+    {
+      "tid": "TID-1-2-008",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-008"
+    },
+    {
+      "tid": "TID-1-2-009",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-009"
+    },
+    {
+      "tid": "TID-1-2-010",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-010"
+    },
+    {
+      "tid": "TID-1-2-011",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-011"
+    },
+    {
+      "tid": "TID-1-2-012",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-012"
+    },
+    {
+      "tid": "TID-1-2-013",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-013"
+    },
+    {
+      "tid": "TID-1-2-014",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-014"
+    },
+    {
+      "tid": "TID-1-2-015",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-015"
+    },
+    {
+      "tid": "TID-1-2-016",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-016"
+    },
+    {
+      "tid": "TID-1-2-017",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-017"
+    },
+    {
+      "tid": "TID-1-2-018",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-018"
+    },
+    {
+      "tid": "TID-1-2-019",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-019"
+    },
+    {
+      "tid": "TID-1-2-020",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-020"
+    },
+    {
+      "tid": "TID-1-2-021",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-021"
+    },
+    {
+      "tid": "TID-1-2-022",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-022"
+    },
+    {
+      "tid": "TID-1-2-023",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-023"
+    },
+    {
+      "tid": "TID-1-2-024",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-024"
+    },
+    {
+      "tid": "TID-1-2-025",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-2-025"
+    },
+    {
+      "tid": "TID-1-3-001",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-001"
+    },
+    {
+      "tid": "TID-1-3-002",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-002"
+    },
+    {
+      "tid": "TID-1-3-003",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-003"
+    },
+    {
+      "tid": "TID-1-3-004",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-004"
+    },
+    {
+      "tid": "TID-1-3-005",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-005"
+    },
+    {
+      "tid": "TID-1-3-006",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-006"
+    },
+    {
+      "tid": "TID-1-3-007",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-007"
+    },
+    {
+      "tid": "TID-1-3-008",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-008"
+    },
+    {
+      "tid": "TID-1-3-009",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-009"
+    },
+    {
+      "tid": "TID-1-3-010",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-010"
+    },
+    {
+      "tid": "TID-1-3-011",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-011"
+    },
+    {
+      "tid": "TID-1-3-012",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-012"
+    },
+    {
+      "tid": "TID-1-3-013",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-013"
+    },
+    {
+      "tid": "TID-1-3-014",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-014"
+    },
+    {
+      "tid": "TID-1-3-015",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-015"
+    },
+    {
+      "tid": "TID-1-3-016",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-016"
+    },
+    {
+      "tid": "TID-1-3-017",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-017"
+    },
+    {
+      "tid": "TID-1-3-018",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-018"
+    },
+    {
+      "tid": "TID-1-3-019",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-019"
+    },
+    {
+      "tid": "TID-1-3-020",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-020"
+    },
+    {
+      "tid": "TID-1-3-021",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-021"
+    },
+    {
+      "tid": "TID-1-3-022",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-1-3-022"
+    }
+  ],
+  "summary": {
+    "total": 72,
+    "red": 72,
+    "green_leaked": 0,
+    "environmental": 0,
+    "unmapped": 0
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "formatter": "ruff",
+  "formatter_version": "0.15.13",
+  "python_version": "3.10.12",
+  "note": "Substituido prettier por ruff format porque o projeto e Python. Lint F401 (pytest imported but unused) deixado intacto: skeletons TDD-locked, pytest sera usado quando assertions forem implementadas.",
+  "reformatted_files": 0,
+  "scope": "tests-tdd/module-1 + tests/contracts + tests/integration (33 arquivos)",
+  "canonicalized_at": "2026-05-17T06:30:00Z"
+}

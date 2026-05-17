@@ -1,0 +1,4 @@
+# Runtime do Task Manager Desktop.
+# Apenas PySide6 — sqlite3, os, pathlib, datetime sao stdlib (Python 3.10+).
+# Mantido enxuto para garantir offline-first (zero deps de rede em runtime).
+PySide6>=6.4
