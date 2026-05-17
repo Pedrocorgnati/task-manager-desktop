@@ -23,7 +23,7 @@ class EditTaskDialog(QDialog):
         self.setMinimumWidth(480)
         self.setWindowTitle("Editar task")
         self.setModal(True)
-        self.setAccessibleName("Dialogo Editar Task")
+        self.setAccessibleName("Diálogo Editar Task")
 
         self.form = TaskFormWidget(self, initial=task)
 

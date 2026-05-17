@@ -22,7 +22,7 @@ class NewTaskDialog(QDialog):
         self.setMinimumWidth(480)
         self.setWindowTitle("Nova task")
         self.setModal(True)
-        self.setAccessibleName("Dialogo Nova Task")
+        self.setAccessibleName("Diálogo Nova Task")
 
         self.form = TaskFormWidget(self, initial=None)
 
