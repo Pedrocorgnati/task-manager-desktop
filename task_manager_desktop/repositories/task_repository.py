@@ -91,6 +91,13 @@ class TaskRepository:
         self._conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
         self._conn.commit()
 
+    def update_notes(self, task_id: str, notes: str) -> None:
+        self._conn.execute(
+            "UPDATE tasks SET notes = ? WHERE id = ?",
+            (notes, task_id),
+        )
+        self._conn.commit()
+
     def list_active(self) -> list[Task]:
         rows = self._conn.execute(
             "SELECT * FROM tasks WHERE hidden_at IS NULL ORDER BY order_index ASC, created_at ASC"
