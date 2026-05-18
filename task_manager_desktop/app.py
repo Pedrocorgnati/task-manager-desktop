@@ -135,6 +135,31 @@ def main() -> None:
     header.new_task_requested.connect(create_ctrl.handle)
     task_list.task_selected.connect(lambda task: window.select_task(task.id))
 
+    def _refresh_project_filter() -> None:
+        try:
+            header.set_projects(repo.list_projetos())
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _on_search_changed(query: str) -> None:
+        task_list.set_filters(query, header.current_project())
+        _reconcile_reader_visibility()
+
+    def _on_project_filter_changed(_projeto: str) -> None:
+        task_list.set_filters(header._search.text(), header.current_project())
+        _reconcile_reader_visibility()
+
+    header.search_changed.connect(_on_search_changed)
+    header.project_filter_changed.connect(_on_project_filter_changed)
+
+    _orig_refresh = task_list.refresh
+
+    def _refresh_with_projects(tasks=None):
+        _orig_refresh(tasks)
+        _refresh_project_filter()
+
+    task_list.refresh = _refresh_with_projects  # type: ignore[method-assign]
+
     # Load existing tasks
     task_list.refresh(repo.list_active())
 
@@ -161,6 +186,18 @@ def main() -> None:
             pass
 
     reader.switch_blocked.connect(_on_switch_blocked)
+
+    def _reconcile_reader_visibility() -> None:
+        if reader.is_editing():
+            return
+        current_id = reader.current_task_id()
+        if not current_id:
+            return
+        if current_id not in task_list.visible_task_ids():
+            try:
+                reader.clear()
+            except Exception:  # noqa: BLE001
+                pass
 
     window.show()
     sys.exit(app.exec())

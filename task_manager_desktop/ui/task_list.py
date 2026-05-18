@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from task_manager_desktop.core.filters import ALL_PROJECTS_SENTINEL, is_active, matches
 from task_manager_desktop.core.models import Sector, Task
 from task_manager_desktop.core.sector import compute_sector, count_open_deps
 from task_manager_desktop.ui.theme import PALETTE
@@ -163,6 +164,8 @@ class TaskList(QWidget):
         self._tasks: list[Task] = []
         self._repo: TaskRepository | None = None
         self._main_window: QWidget | None = None
+        self._query: str = ""
+        self._projeto: str = ALL_PROJECTS_SENTINEL
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -200,6 +203,25 @@ class TaskList(QWidget):
             self._tasks = self._repo.list_active()
         self._rebuild(self._tasks)
 
+    def set_filters(self, query: str | None, projeto: str | None) -> None:
+        self._query = (query or "").strip()
+        self._projeto = projeto or ALL_PROJECTS_SENTINEL
+        self._rebuild(self._tasks)
+
+    def visible_task_ids(self) -> list[str]:
+        return [
+            self._inner._task_id_at(r)
+            for r in range(self._inner.count())
+            if self._inner._type_at(r) == "task"
+        ]
+
+    def _task_rows(self) -> list[int]:
+        return [
+            r
+            for r in range(self._inner.count())
+            if self._inner._type_at(r) == "task"
+        ]
+
     def move_card_to_sector(self, task_id: str, sector: int) -> None:
         """Move a card to a new sector (incremental render).
 
@@ -220,16 +242,25 @@ class TaskList(QWidget):
         self._inner.clear()
         all_tasks: dict[str, Task] = {t.id: t for t in tasks}
 
+        filter_active = is_active(self._query, self._projeto)
+        visible_tasks = (
+            [t for t in tasks if matches(t, self._query, self._projeto)]
+            if filter_active
+            else list(tasks)
+        )
+
         groups: dict[Sector, list[Task]] = {s: [] for s in _SECTOR_ORDER}
-        for task in tasks:
+        for task in visible_tasks:
             groups[_task_sector(task, all_tasks)].append(task)
         # Sort each sector by order_index
         for sector_tasks in groups.values():
             sector_tasks.sort(key=lambda t: t.order_index)
 
         for sector in _SECTOR_ORDER:
-            self._add_separator(sector)
             sector_tasks = groups[sector]
+            if filter_active and not sector_tasks:
+                continue
+            self._add_separator(sector)
             if not sector_tasks:
                 self._add_placeholder(sector)
             else:
