@@ -7,6 +7,7 @@ from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QColor, QDropEvent
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QLabel,
     QListWidget,
     QListWidgetItem,
     QVBoxLayout,
@@ -171,6 +172,15 @@ class TaskList(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        self._empty_label = QLabel(
+            "Sem tasks. Clique em + para criar a primeira.", self
+        )
+        self._empty_label.setObjectName("emptyStateText")
+        self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_label.setWordWrap(True)
+        self._empty_label.hide()
+        layout.addWidget(self._empty_label)
+
         self._inner = _InnerList(self)
         layout.addWidget(self._inner)
 
@@ -287,6 +297,8 @@ class TaskList(QWidget):
             if filter_active
             else list(tasks)
         )
+
+        self._empty_label.setVisible(not tasks and not filter_active)
 
         groups: dict[Sector, list[Task]] = {s: [] for s in _SECTOR_ORDER}
         for task in visible_tasks:

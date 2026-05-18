@@ -55,9 +55,11 @@ class ShortcutsController:
 
         return _fire
 
-    @staticmethod
-    def _focus_is_text_input() -> bool:
-        focus = QApplication.focusWidget()
+    def _focus_is_text_input(self) -> bool:
+        # window.focusWidget() works even when the window is not the OS active
+        # window (pytest-qt offscreen, popup overlays); QApplication.focusWidget()
+        # is the broader fallback for focus that escaped the controlled window.
+        focus = self._w.focusWidget() or QApplication.focusWidget()
         return isinstance(focus, (QPlainTextEdit, QTextEdit, QLineEdit))
 
 
