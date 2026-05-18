@@ -152,6 +152,29 @@ def main() -> None:
     header.search_changed.connect(_on_search_changed)
     header.project_filter_changed.connect(_on_project_filter_changed)
 
+    def _on_clear_completed() -> None:
+        import sqlite3 as _sql
+
+        try:
+            n = repo.hide_all_done()
+        except (_sql.OperationalError, _sql.IntegrityError) as exc:
+            ErrorDialog.show_io_error(window, exc, repo.db_path)
+            return
+        if n > 0:
+            task_list.refresh(repo.list_active())
+            _reconcile_reader_visibility()
+
+    def _on_trash_clicked() -> None:
+        from .ui.dialogs.trash_dialog import TrashDialog
+
+        dlg = TrashDialog(repo, parent=window)
+        dlg.restore_requested.connect(lambda _tid: task_list.refresh(repo.list_active()))
+        dlg.exec()
+        task_list.refresh(repo.list_active())
+
+    header.clear_completed_clicked.connect(_on_clear_completed)
+    header.trash_clicked.connect(_on_trash_clicked)
+
     _orig_refresh = task_list.refresh
 
     def _refresh_with_projects(tasks=None):

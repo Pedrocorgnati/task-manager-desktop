@@ -22,6 +22,7 @@ def test_task_repository_facade_exposes_nine_public_methods():
         "update_status",       # added in module-2 TASK-1 (ST001)
         "update_order_indexes",  # added in module-2 TASK-1 (ST001)
         "update_notes",        # added in intake-review TASK-1 (B1 MarkdownReader)
+        "hide_all_done",       # added in intake-review TASK-4 (B5 TrashDialog + clear-done)
     }
 
     public_methods = {

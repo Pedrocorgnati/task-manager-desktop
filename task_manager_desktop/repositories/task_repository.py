@@ -154,3 +154,13 @@ class TaskRepository:
                 "UPDATE tasks SET order_index = ? WHERE id = ?",
                 [(order_index, task_id) for task_id, order_index in pairs],
             )
+
+    def hide_all_done(self) -> int:
+        now = datetime.now(timezone.utc).isoformat()
+        with self._conn:
+            cursor = self._conn.execute(
+                "UPDATE tasks SET hidden_at = ? "
+                "WHERE status = ? AND hidden_at IS NULL",
+                (now, Status.DONE.value),
+            )
+            return cursor.rowcount
