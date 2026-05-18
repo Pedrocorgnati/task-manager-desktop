@@ -1,20 +1,51 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QWidget
+from PySide6.QtWidgets import (
+    QComboBox,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QSizePolicy,
+    QToolButton,
+    QWidget,
+)
+
+from task_manager_desktop.ui.icons import (
+    CLEAR_DONE_SVG,
+    TRASH_SVG,
+    svg_to_icon,
+)
+
+_ALL_PROJECTS_LABEL = "Todos"
+_ALL_PROJECTS_VALUE = "__all__"
+_SEARCH_DEBOUNCE_MS = 150
 
 
 class HeaderBar(QWidget):
     new_task_requested = Signal()
+    search_changed = Signal(str)
+    project_filter_changed = Signal(str)
+    clear_completed_clicked = Signal()
+    trash_clicked = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFixedHeight(52)
         self.setObjectName("HeaderBar")
         self.setAccessibleName("Barra de cabeçalho")
+
+        self._search_debounce = QTimer(self)
+        self._search_debounce.setSingleShot(True)
+        self._search_debounce.setInterval(_SEARCH_DEBOUNCE_MS)
+        self._search_debounce.timeout.connect(self._emit_search_changed)
+
         self._build_ui()
 
+    # ------------------------------------------------------------------
+    # Build
+    # ------------------------------------------------------------------
     def _build_ui(self) -> None:
         layout = QHBoxLayout(self)
         layout.setContentsMargins(16, 0, 16, 0)
@@ -30,8 +61,98 @@ class HeaderBar(QWidget):
         self.btn_new.clicked.connect(self.new_task_requested.emit)
         layout.addWidget(self.btn_new)
 
-        layout.addStretch()
+        self._search = QLineEdit(self)
+        self._search.setObjectName("headerSearch")
+        self._search.setPlaceholderText("Buscar tasks...")
+        self._search.setClearButtonEnabled(True)
+        self._search.setAccessibleName("Campo de busca de tasks")
+        self._search.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._search.setMinimumHeight(32)
+        self._search.textChanged.connect(self._on_search_text_changed)
+        layout.addWidget(self._search, 1)
 
+        self._project_filter = QComboBox(self)
+        self._project_filter.setObjectName("headerProjectFilter")
+        self._project_filter.setAccessibleName("Filtro de projeto")
+        self._project_filter.setFixedWidth(180)
+        self._project_filter.setMinimumHeight(32)
+        self._project_filter.addItem(_ALL_PROJECTS_LABEL)
+        self._project_filter.currentIndexChanged.connect(self._on_project_changed)
+        layout.addWidget(self._project_filter)
+
+        self._btn_clear_done = QToolButton(self)
+        self._btn_clear_done.setObjectName("headerClearDone")
+        self._btn_clear_done.setAccessibleName("Ocultar concluidas")
+        self._btn_clear_done.setToolTip("Ocultar tasks concluidas")
+        self._btn_clear_done.setIcon(svg_to_icon(CLEAR_DONE_SVG, 20))
+        self._btn_clear_done.setIconSize(QSize(20, 20))
+        self._btn_clear_done.setFixedSize(32, 32)
+        self._btn_clear_done.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_clear_done.clicked.connect(self.clear_completed_clicked.emit)
+        layout.addWidget(self._btn_clear_done)
+
+        self._btn_trash = QToolButton(self)
+        self._btn_trash.setObjectName("headerTrash")
+        self._btn_trash.setAccessibleName("Abrir lixeira")
+        self._btn_trash.setToolTip("Abrir lixeira")
+        self._btn_trash.setIcon(svg_to_icon(TRASH_SVG, 20))
+        self._btn_trash.setIconSize(QSize(20, 20))
+        self._btn_trash.setFixedSize(32, 32)
+        self._btn_trash.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_trash.clicked.connect(self.trash_clicked.emit)
+        layout.addWidget(self._btn_trash)
+
+    # ------------------------------------------------------------------
+    # External shortcut hook (Ctrl+N) — unchanged contract
+    # ------------------------------------------------------------------
     def install_shortcut(self, parent: QWidget) -> None:
         shortcut = QShortcut(QKeySequence("Ctrl+N"), parent)
         shortcut.activated.connect(self.new_task_requested.emit)
+
+    # ------------------------------------------------------------------
+    # Search
+    # ------------------------------------------------------------------
+    def _on_search_text_changed(self, _text: str) -> None:
+        self._search_debounce.start()
+
+    def _emit_search_changed(self) -> None:
+        self.search_changed.emit(self._search.text())
+
+    def clear_search(self) -> None:
+        self._search.clear()
+        self._search_debounce.stop()
+        self.search_changed.emit("")
+
+    def focus_search(self) -> None:
+        self._search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+
+    # ------------------------------------------------------------------
+    # ProjectFilter
+    # ------------------------------------------------------------------
+    def _on_project_changed(self, _idx: int) -> None:
+        value = self.current_project()
+        self.project_filter_changed.emit(value)
+
+    def current_project(self) -> str:
+        if self._project_filter.currentText() == _ALL_PROJECTS_LABEL:
+            return _ALL_PROJECTS_VALUE
+        return self._project_filter.currentText()
+
+    def set_projects(self, projects: list[str]) -> None:
+        previous = self._project_filter.currentText()
+        unique_sorted = sorted({p for p in projects if p and p != _ALL_PROJECTS_LABEL})
+
+        self._project_filter.blockSignals(True)
+        self._project_filter.clear()
+        self._project_filter.addItem(_ALL_PROJECTS_LABEL)
+        for proj in unique_sorted:
+            self._project_filter.addItem(proj)
+
+        target_idx = 0
+        if previous in unique_sorted:
+            target_idx = self._project_filter.findText(previous)
+        self._project_filter.setCurrentIndex(max(0, target_idx))
+        self._project_filter.blockSignals(False)
+
+        if previous != self._project_filter.currentText():
+            self.project_filter_changed.emit(self.current_project())

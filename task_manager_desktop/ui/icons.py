@@ -56,3 +56,32 @@ PLUS_SVG = (
     '<line x1="5" y1="12" x2="19" y2="12"/>'
     "</svg>"
 )
+
+CLEAR_DONE_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+    f' stroke="{_P["COLOR_SUCCESS"]}" stroke-width="2"'
+    ' stroke-linecap="round" stroke-linejoin="round">'
+    '<polyline points="20 6 9 17 4 12"/>'
+    '<polyline points="3 20 13 20"/>'
+    "</svg>"
+)
+
+
+def svg_to_icon(svg: str, size: int = 20):
+    from PySide6.QtCore import QByteArray, QSize
+    from PySide6.QtGui import QIcon, QPainter, QPixmap
+    from PySide6.QtSvg import QSvgRenderer
+
+    renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+    pixmap = QPixmap(QSize(size, size))
+    pixmap.fill(Qt_transparent())
+    painter = QPainter(pixmap)
+    renderer.render(painter)
+    painter.end()
+    return QIcon(pixmap)
+
+
+def Qt_transparent():
+    from PySide6.QtCore import Qt
+
+    return Qt.GlobalColor.transparent
