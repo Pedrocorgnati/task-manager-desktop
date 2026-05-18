@@ -222,6 +222,45 @@ class TaskList(QWidget):
             if self._inner._type_at(r) == "task"
         ]
 
+    def get_selected_task(self) -> Task | None:
+        row = self._inner.currentRow()
+        if row < 0:
+            return None
+        if self._inner._type_at(row) != "task":
+            return None
+        tid = self._inner._task_id_at(row)
+        if not tid:
+            return None
+        for task in self._tasks:
+            if task.id == tid:
+                return task
+        return None
+
+    def select_next(self) -> None:
+        rows = self._task_rows()
+        if not rows:
+            return
+        cur = self._inner.currentRow()
+        next_row = next((r for r in rows if r > cur), None)
+        if next_row is None:
+            next_row = rows[-1]
+        self._inner.setCurrentRow(next_row)
+
+    def select_prev(self) -> None:
+        rows = self._task_rows()
+        if not rows:
+            return
+        cur = self._inner.currentRow()
+        prev_row = next((r for r in reversed(rows) if r < cur), None)
+        if prev_row is None:
+            prev_row = rows[0]
+        self._inner.setCurrentRow(prev_row)
+
+    def open_selected(self) -> None:
+        task = self.get_selected_task()
+        if task is not None:
+            self.task_selected.emit(task)
+
     def move_card_to_sector(self, task_id: str, sector: int) -> None:
         """Move a card to a new sector (incremental render).
 

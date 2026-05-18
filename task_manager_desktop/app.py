@@ -210,6 +210,42 @@ def main() -> None:
 
     reader.switch_blocked.connect(_on_switch_blocked)
 
+    from .core.models import Status
+    from .ui.shortcuts_controller import ShortcutsController
+
+    def _edit_selected() -> None:
+        t = task_list.get_selected_task()
+        if t is not None:
+            edit_ctrl.handle_edit(t)
+
+    def _mark_done_selected() -> None:
+        t = task_list.get_selected_task()
+        if t is not None:
+            change_status_ctrl.handle(t, Status.DONE.value, None)
+
+    def _delete_selected() -> None:
+        t = task_list.get_selected_task()
+        if t is not None:
+            delete_ctrl.handle(t)
+
+    def _esc_handler() -> None:
+        focus = QApplication.focusWidget()
+        if focus is header._search:
+            window.setFocus()
+
+    shortcut_callbacks = {
+        "edit_selected": _edit_selected,
+        "mark_done_selected": _mark_done_selected,
+        "focus_search": header.focus_search,
+        "clear_search": header.clear_search,
+        "select_prev": task_list.select_prev,
+        "select_next": task_list.select_next,
+        "open_selected": task_list.open_selected,
+        "delete_selected": _delete_selected,
+        "esc_handler": _esc_handler,
+    }
+    ShortcutsController(window, shortcut_callbacks).install()
+
     def _reconcile_reader_visibility() -> None:
         if reader.is_editing():
             return
