@@ -1,0 +1,405 @@
+{
+  "module": "module-2-setores-dependencias",
+  "generated_at": "2026-05-17T23:15:49Z",
+  "generator": "/tdd:create-suite",
+  "suites": [
+    {
+      "tid": "TID-2-1-001",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-001",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-002",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-002",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-003",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-003",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-004",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-004",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-005",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-005",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-006",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-006",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-007",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-007",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-008",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-008",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-009",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-009",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-010",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-010",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-011",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-011",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-012",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-012",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-013",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-013",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-014",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-014",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-015",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-015",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-016",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-016",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-017",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-017",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-1-018",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-1-018",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-001",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-001",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-002",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-002",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-003",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-003",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-004",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-004",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-005",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-005",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-006",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-006",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-007",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-007",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-008",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-008",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-009",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-009",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-010",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-010",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-011",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-011",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-012",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-012",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-013",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-013",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-014",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-014",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-015",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-015",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-016",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-016",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-017",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-017",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-018",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-018",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-2-019",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-2-019",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-001",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-001",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-002",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-002",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-003",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-003",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-004",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-004",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-005",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-005",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-006",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-006",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-007",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-007",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-008",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-008",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-009",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-009",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-010",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-010",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-011",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-011",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-012",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-012",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-013",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-013",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-014",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-014",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-015",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-015",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-016",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-016",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-017",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-017",
+      "canonical": true,
+      "expected_signature_match": true
+    },
+    {
+      "tid": "TID-2-3-018",
+      "status": "failed",
+      "signature": "TDD-RED: NOT_IMPLEMENTED TID-2-3-018",
+      "canonical": true,
+      "expected_signature_match": true
+    }
+  ],
+  "summary": {
+    "total": 55,
+    "red": 55,
+    "green_leaked": 0,
+    "environmental": 0,
+    "missing": 0,
+    "signature_drift": 0
+  },
+  "tooling": {
+    "pytest_version": "9.0.3",
+    "ruff_version": "0.15.5",
+    "python_version": "3.10.12"
+  }
+}

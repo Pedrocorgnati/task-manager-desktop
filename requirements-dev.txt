@@ -1,6 +1,6 @@
-# Toolchain de desenvolvimento (testes, lint, typecheck).
-# Instalar com: .venv/bin/pip install -r requirements-dev.txt
-# Nao distribuir junto com o runtime.
+# DEPRECATED (2026-05-18 TASK-4/ST014): use `pip install -e .[dev]`
+# Fonte da verdade agora: pyproject.toml [project.optional-dependencies].dev
+# Mantido temporariamente para CI legado.
 -r requirements.txt
 pytest>=7
 pytest-cov>=4

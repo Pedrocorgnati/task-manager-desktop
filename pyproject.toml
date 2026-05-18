@@ -12,6 +12,15 @@ authors = [{ name = "Pedro Corgnati", email = "corgnati.pedro@gmail.com" }]
 requires-python = ">=3.10"
 dependencies = ["PySide6>=6.4"]
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=7",
+  "pytest-cov>=4",
+  "pytest-qt>=4",
+  "mypy>=1",
+  "ruff>=0.5",
+]
+
 [project.scripts]
 task-manager = "task_manager_desktop.__main__:main"
 
@@ -24,6 +33,10 @@ testpaths = ["tests", "tests-tdd"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+  "perf: opt-in performance gate (p95/p99 assertions). Requires --run-perf to actually fail.",
+  "acceptance: acceptance test mapped to AC-T-xxx in MODULE-USER-STORIES.md.",
+]
 
 [tool.ruff]
 line-length = 99
@@ -37,3 +50,15 @@ ignore = ["E501"]
 python_version = "3.10"
 strict = false
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# TASK-4/ST013: zona estrita comeca pelo change_status_controller (alvo da revisao).
+# Demais controllers serao migrados em corretivas futuras (risk note TASK-4).
+module = "task_manager_desktop.controllers.change_status_controller"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+module = "task_manager_desktop.controllers._protocols"
+disallow_untyped_defs = true
+disallow_incomplete_defs = true

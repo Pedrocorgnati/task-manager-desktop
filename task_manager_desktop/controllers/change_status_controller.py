@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import logging
+import os
 import sqlite3
-import sys
 from collections.abc import Callable
-from datetime import datetime, timezone
-from typing import Any
+from datetime import datetime
 
+from task_manager_desktop.controllers._protocols import (
+    ErrorHandler,
+    SegmentedControlLike,
+    TaskListLike,
+)
+from task_manager_desktop.core._time import utc_naive_now
+from task_manager_desktop.core.constants import PROPAGATION_THRESHOLD
 from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.core.sector import compute_sector_change_propagation
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
-_PROPAGATION_THRESHOLD = 20
+_logger = logging.getLogger(__name__)
 
 
 class ChangeStatusController:
@@ -18,15 +25,19 @@ class ChangeStatusController:
 
     Accepts Protocol-based dependencies so unit tests run without Qt.
     The app wire-up passes adapters; tests pass mocks.
+
+    The `_busy` flag is a defensive guardrail: in single-thread Qt the real
+    double-click guard is `segmented.setEnabled(False)`. `_busy` survives a
+    future migration to QThreadPool/async without changing call sites.
     """
 
     def __init__(
         self,
         repo: TaskRepository,
         all_tasks_provider: Callable[[], dict[str, Task]],
-        error_handler: object,
+        error_handler: ErrorHandler,
         refresh_card: Callable[[Task], None],
-        task_list: Any | None = None,
+        task_list: TaskListLike | None = None,
     ) -> None:
         self._repo = repo
         self._all_tasks = all_tasks_provider
@@ -35,53 +46,68 @@ class ChangeStatusController:
         self._task_list = task_list
         self._busy = False
 
-    def change_status(self, task: Task, new_status_str: str, segmented: object | None = None) -> None:
+    def change_status(
+        self,
+        task: Task,
+        new_status_str: str,
+        segmented: SegmentedControlLike | None = None,
+    ) -> None:
         """Primary entry-point.  segmented is optional; when provided its
         setEnabled(bool) / setValue(str) are called to prevent double-click
         and to revert the visual on I/O error."""
 
-        # Re-entrancy guard: fast double-click protection
         if self._busy:
             return
 
-        # Defensive status conversion
         try:
             new_status = Status(new_status_str)
         except ValueError:
-            print(f"[WARN] invalid status {new_status_str!r}", file=sys.stderr)
+            _logger.warning(
+                "invalid status string %r for task %s",
+                new_status_str,
+                task.id,
+                extra={"task_id": task.id, "new_status_str": new_status_str},
+            )
             return
 
-        # No-op: same status clicked
         if task.status == new_status:
             return
 
         # completed_at logic (AC-T-002)
-        # _completed_dt is a datetime object passed to update_status; stored as ISO str in Task
         if new_status == Status.DONE:
-            _completed_dt: datetime | None = datetime.now(timezone.utc).replace(tzinfo=None)
+            _completed_dt: datetime | None = utc_naive_now()
         elif task.status == Status.DONE:
             _completed_dt = None
         else:
-            _completed_dt = None  # preserve existing value by re-reading from DB after update
+            _completed_dt = None  # TODO(module-future): migrar schema para aware UTC, ver _SCOPE-CONTRACT.json
 
         previous_status = task.status
 
-        # Lock UI against double-click
         if segmented is not None:
-            segmented.setEnabled(False)  # type: ignore[attr-defined]
+            segmented.setEnabled(False)
         self._busy = True
+        io_error: sqlite3.DatabaseError | None = None
         try:
             self._repo.update_status(task.id, new_status, _completed_dt)
-        except (sqlite3.OperationalError, sqlite3.IntegrityError, Exception) as exc:
-            self._errors.show_io_error(str(exc), self._repo.db_path)  # type: ignore[attr-defined]
-            if segmented is not None:
-                segmented.setValue(previous_status.value)  # type: ignore[attr-defined]
-            self._refresh_card(task)  # task still holds previous status in memory
-            return
+        except sqlite3.DatabaseError as exc:
+            io_error = exc
         finally:
             self._busy = False
             if segmented is not None:
-                segmented.setEnabled(True)  # type: ignore[attr-defined]
+                segmented.setEnabled(True)
+
+        if io_error is not None:
+            db_label = os.path.basename(self._repo.db_path)
+            _logger.error(
+                "I/O error on update_status for task %s",
+                task.id,
+                extra={"task_id": task.id, "db_path": self._repo.db_path},
+            )
+            self._errors.show_io_error(str(io_error), db_label)
+            if segmented is not None:
+                segmented.setValue(previous_status.value)
+            self._refresh_card(task)
+            return
 
         # Success: mutate in-memory task, trigger refresh
         task.status = new_status
@@ -89,11 +115,10 @@ class ChangeStatusController:
             task.completed_at = _completed_dt.isoformat() if _completed_dt else None
         elif previous_status == Status.DONE:
             task.completed_at = None
-        # else: keep existing completed_at (no-change transitions)
         self._refresh_card(task)
 
         # Propagacao de dependentes diretos (RF-008 / US-005)
-        # Apenas em sucesso; nao em path de erro (AC-T-008)
+        # Apenas em sucesso; nao em path de erro (AC-T-008 ramo b)
         if self._task_list is None:
             return
 
@@ -103,13 +128,18 @@ class ChangeStatusController:
         if not propagation:
             return
 
-        if len(propagation) >= _PROPAGATION_THRESHOLD:
+        if len(propagation) >= PROPAGATION_THRESHOLD:
             self._task_list.refresh()
             return
 
         for dep_id, new_sector, _new_color in propagation:
             self._task_list.move_card_to_sector(dep_id, new_sector)
 
-    def handle(self, task: Task, new_status_str: str, segmented: object | None = None) -> None:
+    def handle(
+        self,
+        task: Task,
+        new_status_str: str,
+        segmented: SegmentedControlLike | None = None,
+    ) -> None:
         """Backward-compatible alias used by app.py callbacks dict."""
         self.change_status(task, new_status_str, segmented)
