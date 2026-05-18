@@ -88,6 +88,20 @@ class StatusSegmentedControl(QWidget):
         else:
             ip_btn.setStyleSheet("")
 
+    def setValue(self, status_value: str) -> None:
+        """Revert segmented to a known status without emitting status_changed.
+        Used by ChangeStatusController on I/O error (AC-T-007 QSignalBlocker)."""
+        from PySide6.QtCore import QSignalBlocker
+
+        try:
+            status = Status(status_value)
+        except ValueError:
+            return
+        with QSignalBlocker(self._btn_group):
+            for s, btn in self._buttons.items():
+                btn.setChecked(s == status)
+        self._apply_checked_style()
+
     def update_task(self, task: Task, all_tasks: dict[str, Task]) -> None:
         self._task = task
         self._all_tasks = all_tasks

@@ -83,6 +83,9 @@ class ToastWidget(QWidget):
         self._anim.finished.connect(self.hide)
         self._anim.start(QAbstractAnimation.DeletionPolicy.DeleteWhenStopped)
 
+    def show_info(self, message: str) -> None:
+        self.show_message(message)
+
     def eventFilter(self, obj: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.Resize and obj is self.parent():
             self._reposition()

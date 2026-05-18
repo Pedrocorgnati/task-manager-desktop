@@ -43,9 +43,7 @@ class MainWindowShell(QMainWindow):
             "Sem tasks. Clique em + para criar a primeira.",
             "Atalho: Ctrl+N",
         )
-        self._right_widget: QWidget = EmptyStateLabel(
-            "Selecione uma task para ver as notas."
-        )
+        self._right_widget: QWidget = EmptyStateLabel("Selecione uma task para ver as notas.")
         self._splitter.addWidget(self._left_widget)
         self._splitter.addWidget(self._right_widget)
 
@@ -94,6 +92,7 @@ class MainWindowShell(QMainWindow):
 
     def set_header_widget(self, widget: QWidget) -> None:
         from PySide6.QtWidgets import QToolBar
+
         if self._header_widget is not None:
             tb = self.findChild(QToolBar, "header_toolbar")
             if isinstance(tb, QToolBar):

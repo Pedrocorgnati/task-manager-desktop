@@ -54,7 +54,16 @@ class TaskRepository:
         self._conn.commit()
 
     def update(self, task_id: str, **fields) -> None:
-        allowed = {"title", "status", "type", "projeto", "deps", "notes", "order_index", "completed_at"}
+        allowed = {
+            "title",
+            "status",
+            "type",
+            "projeto",
+            "deps",
+            "notes",
+            "order_index",
+            "completed_at",
+        }
         col_map: dict[str, object] = {}
         for key, val in fields.items():
             if key not in allowed:
@@ -95,22 +104,16 @@ class TaskRepository:
         return [_row_to_task(r) for r in rows]
 
     def get_by_id(self, task_id: str) -> Task | None:
-        row = self._conn.execute(
-            "SELECT * FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return _row_to_task(row) if row else None
 
     def mark_hidden(self, task_id: str) -> None:
         now = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            "UPDATE tasks SET hidden_at = ? WHERE id = ?", (now, task_id)
-        )
+        self._conn.execute("UPDATE tasks SET hidden_at = ? WHERE id = ?", (now, task_id))
         self._conn.commit()
 
     def restore(self, task_id: str) -> None:
-        self._conn.execute(
-            "UPDATE tasks SET hidden_at = NULL WHERE id = ?", (task_id,)
-        )
+        self._conn.execute("UPDATE tasks SET hidden_at = NULL WHERE id = ?", (task_id,))
         self._conn.commit()
 
     def list_projetos(self) -> list[str]:
@@ -120,7 +123,27 @@ class TaskRepository:
         return [r["projeto"] for r in rows]
 
     def exists(self, task_id: str) -> bool:
-        row = self._conn.execute(
-            "SELECT 1 FROM tasks WHERE id = ?", (task_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return row is not None
+
+    def update_status(
+        self,
+        task_id: str,
+        status: Status,
+        completed_at: datetime | None,
+    ) -> None:
+        completed_str = completed_at.isoformat() if completed_at is not None else None
+        self._conn.execute(
+            "UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?",
+            (status.value, completed_str, task_id),
+        )
+        self._conn.commit()
+
+    def update_order_indexes(self, pairs: list[tuple[str, int]]) -> None:
+        if not pairs:
+            return
+        with self._conn:
+            self._conn.executemany(
+                "UPDATE tasks SET order_index = ? WHERE id = ?",
+                [(order_index, task_id) for task_id, order_index in pairs],
+            )

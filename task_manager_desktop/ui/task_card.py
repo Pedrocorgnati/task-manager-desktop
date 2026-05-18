@@ -75,9 +75,7 @@ class TaskCard(QFrame):
         self.setProperty("selected", False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAccessibleName(f"Task {task.id}")
-        self.setAccessibleDescription(
-            f"{task.title}, {task.status.value}, projeto {task.projeto}"
-        )
+        self.setAccessibleDescription(f"{task.title}, {task.status.value}, projeto {task.projeto}")
 
         self._build_ui()
         self._apply_card_style()
@@ -125,9 +123,7 @@ class TaskCard(QFrame):
         right_meta = QHBoxLayout()
         right_meta.setSpacing(0)
 
-        self._seg_ctrl = StatusSegmentedControl(
-            self._task, self._all_tasks, self
-        )
+        self._seg_ctrl = StatusSegmentedControl(self._task, self._all_tasks, self)
         self._seg_ctrl.status_changed.connect(self._on_status_change)
         right_meta.addWidget(self._seg_ctrl)
 
@@ -152,9 +148,7 @@ class TaskCard(QFrame):
         self._title_label = QLabel(self._task.title, self)
         self._title_label.setObjectName("cardTitle")
         self._title_label.setTextFormat(Qt.TextFormat.PlainText)
-        self._title_label.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
+        self._title_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         title_row.addWidget(self._title_label)
         outer.addLayout(title_row)
 
@@ -229,7 +223,7 @@ class TaskCard(QFrame):
     def _on_status_change(self, new_status: str) -> None:
         cb = self._callbacks.get("on_status_change")
         if cb:
-            cb(self._task, new_status)
+            cb(self._task, new_status, self._seg_ctrl)
 
     def _show_context_menu(self) -> None:
         menu = QMenu(self)

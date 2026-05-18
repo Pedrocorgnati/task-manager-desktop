@@ -86,5 +86,6 @@ class ErrorDialog(QDialog):
 
 from task_manager_desktop.ui.dialogs.edit_task_dialog import EditTaskDialog  # noqa: E402
 from task_manager_desktop.ui.dialogs.task_form_widget import TaskFormWidget  # noqa: E402
+from task_manager_desktop.ui.dialogs.trash_dialog import TrashDialog  # noqa: E402
 
-__all__ = ["EditTaskDialog", "ErrorDialog", "TaskFormWidget"]
+__all__ = ["EditTaskDialog", "ErrorDialog", "TaskFormWidget", "TrashDialog"]

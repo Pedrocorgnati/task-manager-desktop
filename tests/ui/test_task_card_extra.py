@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import pytest
-from PySide6.QtWidgets import QMenu
 
 from task_manager_desktop.core.models import Status, Task, TaskType
 from task_manager_desktop.ui.task_card import TaskCard
@@ -15,7 +12,7 @@ def calls_and_cbs():
     cbs = {
         "on_edit": lambda t: calls["edit"].append(t.id),
         "on_delete": lambda t: calls["delete"].append(t.id),
-        "on_status_change": lambda t, s: calls["status"].append((t.id, s)),
+        "on_status_change": lambda t, s, *_: calls["status"].append((t.id, s)),
     }
     return calls, cbs
 

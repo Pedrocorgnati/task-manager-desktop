@@ -31,6 +31,7 @@ class EditTaskController(QObject):
 
     def handle_edit(self, task: Task) -> None:
         from PySide6.QtWidgets import QDialog, QWidget
+
         parent_widget = self._main_window if isinstance(self._main_window, QWidget) else None
         dialog = EditTaskDialog(task, parent_widget)
         persisted = [False]
@@ -71,8 +72,7 @@ class EditTaskController(QObject):
         if cycle_desc and parent_widget:
             toast = ToastWidget(parent_widget)
             toast.show_message(
-                "Ciclo de dependência detectado. "
-                "Dependência mais antiga removida automaticamente."
+                "Ciclo de dependência detectado. Dependência mais antiga removida automaticamente."
             )
 
         if data["projeto"] != old_projeto:
@@ -83,11 +83,13 @@ class EditTaskController(QObject):
 
     def handle_status_change(self, task: Task, new_status: str) -> None:
         from PySide6.QtWidgets import QWidget
+
         parent_widget = self._main_window if isinstance(self._main_window, QWidget) else None
         try:
             completed_at = None
             if new_status == "done":
                 from datetime import datetime, timezone
+
                 completed_at = datetime.now(timezone.utc).isoformat()
             self._repo.update(task.id, status=Status(new_status), completed_at=completed_at)
         except sqlite3.Error as exc:

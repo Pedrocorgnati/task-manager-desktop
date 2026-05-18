@@ -19,6 +19,8 @@ def test_task_repository_facade_exposes_nine_public_methods():
         "list_active", "list_trash", "get_by_id",
         "mark_hidden", "restore", "list_projetos",
         "exists",
+        "update_status",       # added in module-2 TASK-1 (ST001)
+        "update_order_indexes",  # added in module-2 TASK-1 (ST001)
     }
 
     public_methods = {

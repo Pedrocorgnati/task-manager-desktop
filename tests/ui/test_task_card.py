@@ -12,7 +12,7 @@ def callbacks():
     cbs = {
         "on_edit": lambda t: calls["edit"].append(t.id),
         "on_delete": lambda t: calls["delete"].append(t.id),
-        "on_status_change": lambda t, s: calls["status"].append((t.id, s)),
+        "on_status_change": lambda t, s, *_: calls["status"].append((t.id, s)),
     }
     return calls, cbs
 

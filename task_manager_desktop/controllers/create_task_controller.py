@@ -31,6 +31,7 @@ class CreateTaskController(QObject):
 
     def handle(self) -> None:
         from PySide6.QtWidgets import QDialog, QWidget
+
         parent_widget = self._main_window if isinstance(self._main_window, QWidget) else None
         dialog = NewTaskDialog(parent_widget)
         persisted = [False]
@@ -81,8 +82,7 @@ class CreateTaskController(QObject):
         if cycle_desc and parent_widget:
             toast = ToastWidget(parent_widget)
             toast.show_message(
-                "Ciclo de dependência detectado. "
-                "Dependência mais antiga removida automaticamente."
+                "Ciclo de dependência detectado. Dependência mais antiga removida automaticamente."
             )
 
         self._task_list.refresh(self._repo.list_active())

@@ -44,9 +44,7 @@ def resolve_cycles(
         if path is not None:
             if description is None:
                 cycle_path = "->".join(path)
-                description = (
-                    f"Substituida dep '{dep}' para evitar ciclo com '{cycle_path}'"
-                )
+                description = f"Substituida dep '{dep}' para evitar ciclo com '{cycle_path}'"
         else:
             safe.append(dep)
 
