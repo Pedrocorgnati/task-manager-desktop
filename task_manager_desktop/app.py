@@ -194,8 +194,6 @@ def main() -> None:
     window.set_right_widget(reader)
 
     def _on_task_selected_for_reader(task):
-        # Edge: trocar de task durante edit mode bloqueia switch.
-        # MarkdownReader.show_task emite switch_blocked se ja em edicao.
         reader.show_task(task)
 
     task_list.task_selected.connect(_on_task_selected_for_reader)

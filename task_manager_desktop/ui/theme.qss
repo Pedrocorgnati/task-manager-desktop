@@ -237,3 +237,134 @@ QLineEdit[class="field-error"] {
 QLineEdit[class="field-error"]:focus {
     border: 2px solid #FB7185;
 }
+
+/* MarkdownViewer — QTextBrowser */
+QTextBrowser#markdownBrowser {
+    background: #18181B;
+    color: #FAFAFA;
+    border: none;
+    padding: 24px 32px;
+    font-family: "Ubuntu Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    selection-background-color: #FBBF24;
+    selection-color: #18181B;
+}
+QTextBrowser#markdownBrowser QScrollBar:vertical {
+    background: #27272A;
+    width: 8px;
+    border-radius: 4px;
+}
+QTextBrowser#markdownBrowser QScrollBar::handle:vertical {
+    background: #3F3F46;
+    border-radius: 4px;
+    min-height: 24px;
+}
+QTextBrowser#markdownBrowser QScrollBar::handle:vertical:hover {
+    background: #71717A;
+}
+QTextBrowser#markdownBrowser QScrollBar::add-line:vertical,
+QTextBrowser#markdownBrowser QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+/* EditorToolbar */
+QWidget#editorToolbar {
+    background: #27272A;
+    border-bottom: 1px solid #3F3F46;
+}
+
+QLabel#editorShortcutHint {
+    color: #71717A;
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 11px;
+    background: transparent;
+}
+
+/* MarkdownEditor — QPlainTextEdit */
+QPlainTextEdit[class="md-editor"] {
+    background: #18181B;
+    color: #FAFAFA;
+    border: none;
+    padding: 24px 32px;
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 13px;
+    selection-background-color: #FBBF24;
+    selection-color: #18181B;
+}
+QPlainTextEdit[class="md-editor"]:focus {
+    border: none;
+    outline: none;
+}
+QPlainTextEdit[class="md-editor"] QScrollBar:vertical {
+    background: #27272A;
+    width: 8px;
+    border-radius: 4px;
+}
+QPlainTextEdit[class="md-editor"] QScrollBar::handle:vertical {
+    background: #3F3F46;
+    border-radius: 4px;
+    min-height: 24px;
+}
+QPlainTextEdit[class="md-editor"] QScrollBar::handle:vertical:hover {
+    background: #71717A;
+}
+
+/* Botão Editar (overlay no viewer) */
+QPushButton[class="edit-btn"] {
+    background: transparent;
+    color: #A1A1AA;
+    border: 1px solid #3F3F46;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 12px;
+    min-height: 28px;
+}
+QPushButton[class="edit-btn"]:hover {
+    background: #3F3F46;
+    color: #FAFAFA;
+}
+QPushButton[class="edit-btn"]:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}
+
+/* Botão Salvar (success) */
+QPushButton[class="success"] {
+    background: #16a34a;
+    color: #FAFAFA; /* [front-end-obvious] */
+    border: none;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    min-height: 36px;
+}
+QPushButton[class="success"]:hover {
+    background: #15803d;
+}
+QPushButton[class="success"]:pressed {
+    background: #166534;
+}
+QPushButton[class="success"]:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}
+
+/* Botão Ghost (cancelar) */
+QPushButton[class="ghost"] {
+    background: transparent;
+    color: #A1A1AA;
+    border: 1px solid #3F3F46;
+    border-radius: 6px;
+    padding: 6px 16px;
+    font-size: 14px;
+    min-height: 36px;
+}
+QPushButton[class="ghost"]:hover {
+    background: #3F3F46;
+    color: #FAFAFA;
+}
+QPushButton[class="ghost"]:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}

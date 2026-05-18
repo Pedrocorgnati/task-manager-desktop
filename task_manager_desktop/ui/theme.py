@@ -12,6 +12,8 @@ SPLITTER_SIZES: list[int] = [560, 840]
 FONT_FAMILY_BODY = "Inter, Segoe UI, system-ui, sans-serif"
 FONT_FAMILY_MONO = "JetBrains Mono, Cascadia Code, Consolas, monospace"
 
+TOOLBAR_H: int = 48
+
 TOAST_DURATION_MS: int = 4000
 TOAST_FADE_IN_MS: int = 200
 TOAST_FADE_OUT_MS: int = 400

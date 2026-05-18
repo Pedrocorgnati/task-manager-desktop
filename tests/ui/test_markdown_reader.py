@@ -97,6 +97,7 @@ def test_ctrl_s_saves(qtbot, repo):
     reader._save_shortcut.activated.emit()
     assert repo.get_by_id("t2").notes == "via shortcut"
     assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    reader.hide()
 
 
 def test_save_failure_keeps_editor_open(qtbot, repo, monkeypatch):
@@ -113,29 +114,37 @@ def test_save_failure_keeps_editor_open(qtbot, repo, monkeypatch):
 
     monkeypatch.setattr(repo, "update_notes", _boom)
     # silenciar dialog
-    monkeypatch.setattr(reader, "_show_io_error", lambda exc: None)
+    monkeypatch.setattr(reader._pane, "_show_io_error", lambda exc: None)
     reader._on_save_clicked()
     assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
     assert reader._editor.toPlainText() == "xx"
+    reader._editor.clearFocus()
 
 
-def test_show_task_during_edit_emits_switch_blocked(qtbot):
-    reader = MarkdownReader(repo=None)
+def test_show_task_during_edit_does_implicit_save(qtbot, repo):
+    """Ao trocar de task durante edição, o save implícito persiste as notas."""
+    task_a = _make_task(id="a", notes="a")
+    task_b = _make_task(id="b", notes="b")
+    repo.create(task_a)
+    repo.create(task_b)
+    reader = MarkdownReader(repo)
     qtbot.addWidget(reader)
-    reader.show_task(_make_task(id="a", notes="a"))
+    reader.show_task(task_a)
     reader._on_edit_clicked()
-    other = _make_task(id="b", notes="b")
-    with qtbot.waitSignal(reader.switch_blocked, timeout=500):
-        reader.show_task(other)
-    # task atual NAO mudou
-    assert reader.current_task_id() == "a"
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
+    reader._editor.setPlainText("a-editada")
+    # Trocar para task_b deve salvar implicitamente task_a
+    reader.show_task(task_b)
+    assert reader.current_task_id() == "b"
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    assert repo.get_by_id("a").notes == "a-editada"
 
 
-def test_external_links_enabled(qtbot):
+def test_links_intercepted_not_openexternallinks(qtbot):
+    """Links são interceptados via anchorClicked, não via openExternalLinks."""
     reader = MarkdownReader(repo=None)
     qtbot.addWidget(reader)
-    assert reader._viewer.openExternalLinks() is True
+    # openExternalLinks deve estar False (links tratados por _open_external_link)
+    assert reader._viewer.openExternalLinks() is False
 
 
 def test_show_same_task_twice_is_idempotent(qtbot):

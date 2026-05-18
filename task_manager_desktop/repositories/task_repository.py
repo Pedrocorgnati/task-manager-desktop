@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from datetime import datetime, timezone
 
+from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.core.models import (
     Status,
     Task,
@@ -92,11 +93,13 @@ class TaskRepository:
         self._conn.commit()
 
     def update_notes(self, task_id: str, notes: str) -> None:
-        self._conn.execute(
+        cursor = self._conn.execute(
             "UPDATE tasks SET notes = ? WHERE id = ?",
             (notes, task_id),
         )
         self._conn.commit()
+        if cursor.rowcount == 0:
+            raise TaskNotFoundError(f"Task {task_id!r} não encontrada")
 
     def list_active(self) -> list[Task]:
         rows = self._conn.execute(
