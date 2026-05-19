@@ -425,3 +425,134 @@ QPushButton[class="ghost"]:focus {
     border: 2px solid #FBBF24;
     outline: none;
 }
+
+/* Botão Ghost-sm ("Limpar concluídas" no HeaderBar) */
+QPushButton[class="ghost-sm"] {
+    background: transparent;
+    color: #A1A1AA;
+    border: 1px solid #3F3F46;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    min-height: 36px;
+}
+QPushButton[class="ghost-sm"]:hover {
+    background: #3F3F46;
+    color: #FAFAFA;
+}
+QPushButton[class="ghost-sm"]:disabled {
+    color: #3F3F46;
+    border-color: #27272A;
+}
+QPushButton[class="ghost-sm"]:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}
+
+/* Botão Restaurar (TrashDialog) */
+QPushButton[class="restore-btn"] {
+    background: #16a34a;
+    color: #064E3B;
+    border: none;
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    min-height: 30px;
+}
+QPushButton[class="restore-btn"]:hover {
+    background: #15803d;
+}
+QPushButton[class="restore-btn"]:pressed {
+    background: #166534;
+}
+QPushButton[class="restore-btn"]:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}
+
+/* TrashDialog — título e subtítulo */
+QLabel#trashDialogTitle {
+    font-size: 17px;
+    font-weight: 600;
+    color: #FAFAFA;
+}
+QLabel#trashSubtitle {
+    font-size: 12px;
+    color: #71717A;
+    margin-bottom: 8px;
+}
+
+/* TrashDialog — empty state */
+QLabel#trashEmptyPlaceholder {
+    font-size: 13px;
+    color: #71717A;
+}
+
+/* TrashDialog — row de item */
+QFrame#trashRow {
+    background: #27272A;
+    border-bottom: 1px solid #3F3F46;
+}
+QFrame#trashRow:hover {
+    background: #2F2F32;
+}
+
+/* TrashDialog — ID da task */
+QLabel#trashRowId {
+    font-family: "JetBrains Mono", "Cascadia Code", monospace;
+    font-size: 11px;
+    color: #71717A;
+}
+
+/* TrashDialog — título da task */
+QLabel#trashRowTitle {
+    font-size: 13px;
+    font-weight: 500;
+    color: #FAFAFA;
+}
+
+/* TrashDialog — data de conclusão */
+QLabel#trashRowDate {
+    font-size: 12px;
+    color: #A1A1AA;
+}
+
+/* TrashDialog — scrollbar interna */
+QScrollArea[class="trash-scroll"] {
+    background: #18181B;
+    border: none;
+}
+QScrollArea[class="trash-scroll"] QScrollBar:vertical {
+    background: #27272A;
+    width: 6px;
+    border-radius: 3px;
+}
+QScrollArea[class="trash-scroll"] QScrollBar::handle:vertical {
+    background: #3F3F46;
+    border-radius: 3px;
+    min-height: 20px;
+}
+QScrollArea[class="trash-scroll"] QScrollBar::handle:vertical:hover {
+    background: #71717A;
+}
+
+/* QToolButton — header trash */
+QToolButton#headerTrash {
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    min-width: 36px;
+    min-height: 36px;
+    padding: 0;
+}
+QToolButton#headerTrash:hover {
+    background: rgba(251, 113, 133, 0.1);
+}
+QToolButton#headerTrash:pressed {
+    background: rgba(251, 113, 133, 0.2);
+}
+QToolButton#headerTrash:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}

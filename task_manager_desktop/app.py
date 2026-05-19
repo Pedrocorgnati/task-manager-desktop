@@ -172,13 +172,21 @@ def main() -> None:
             task_list.refresh(repo.list_active())
             _reconcile_reader_visibility()
 
-    def _on_trash_clicked() -> None:
-        from .ui.dialogs.trash_dialog import TrashDialog
+    from .ui.dialogs.trash_dialog import TrashDialog as _TrashDialog
 
-        dlg = TrashDialog(repo, parent=window)
-        dlg.restore_requested.connect(lambda _tid: task_list.refresh(repo.list_active()))
-        dlg.exec()
+    _trash_dlg = _TrashDialog(repo, parent=window)
+
+    def _on_restore_in_trash(_task_id: str) -> None:
         task_list.refresh(repo.list_active())
+        _reconcile_reader_visibility()
+
+    _trash_dlg.restore_requested.connect(_on_restore_in_trash)
+
+    def _on_trash_clicked() -> None:
+        _trash_dlg.reload()
+        _trash_dlg.exec()
+        task_list.refresh(repo.list_active())
+        _reconcile_reader_visibility()
 
     header.clear_completed_clicked.connect(_on_clear_completed)
     header.trash_clicked.connect(_on_trash_clicked)

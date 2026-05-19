@@ -12,7 +12,7 @@ def test_layout_has_required_widgets(qtbot):
     assert isinstance(bar.btn_new, QPushButton)
     assert isinstance(bar._search, QLineEdit)
     assert isinstance(bar._project_filter, QComboBox)
-    assert isinstance(bar._btn_clear_done, QToolButton)
+    assert isinstance(bar._btn_clear_done, QPushButton)
     assert isinstance(bar._btn_trash, QToolButton)
 
 
@@ -145,8 +145,37 @@ def test_clear_done_button_tooltip_when_disabled(qtbot):
 
 
 def test_clear_done_button_tooltip_when_enabled(qtbot):
-    """Tooltip changes when button enabled."""
+    """Tooltip is empty when button enabled (label is self-explanatory)."""
     bar = HeaderBar()
     qtbot.addWidget(bar)
     bar.set_clear_done_enabled(True)
-    assert "Ocultar tasks concluídas" in bar._btn_clear_done.toolTip()
+    assert bar._btn_clear_done.toolTip() == ""
+
+
+def test_clear_done_button_has_text_label(qtbot):
+    """Button shows text 'Limpar concluídas' (not icon-only)."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    assert bar._btn_clear_done.text() == "Limpar concluídas"
+
+
+def test_trash_button_tooltip(qtbot):
+    """Trash button has correct tooltip."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    assert bar._btn_trash.toolTip() == "Lixeira (tasks ocultas até 30 dias)"
+
+
+def test_clear_done_accessible_name_disabled(qtbot):
+    """Accessible name includes '(nenhuma disponível)' when disabled."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    assert "nenhuma disponível" in bar._btn_clear_done.accessibleName()
+
+
+def test_clear_done_accessible_name_enabled(qtbot):
+    """Accessible name is the action label when enabled."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    bar.set_clear_done_enabled(True)
+    assert bar._btn_clear_done.accessibleName() == "Mover tasks concluídas para a Lixeira"

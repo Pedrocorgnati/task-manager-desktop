@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
 )
 
 from task_manager_desktop.ui.icons import (
-    CLEAR_DONE_SVG,
     TRASH_SVG,
     svg_to_icon,
 )
@@ -81,25 +80,25 @@ class HeaderBar(QWidget):
         self._project_filter.currentIndexChanged.connect(self._on_project_changed)
         layout.addWidget(self._project_filter)
 
-        self._btn_clear_done = QToolButton(self)
-        self._btn_clear_done.setObjectName("headerClearDone")
-        self._btn_clear_done.setAccessibleName("Ocultar concluídas")
+        self._btn_clear_done = QPushButton("Limpar concluídas", self)
+        self._btn_clear_done.setProperty("class", "ghost-sm")
+        self._btn_clear_done.setAccessibleName(
+            "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
+        )
         self._btn_clear_done.setToolTip("Nenhuma task concluída visível")  # default: disabled
         self._btn_clear_done.setEnabled(False)  # disabled by default
-        self._btn_clear_done.setIcon(svg_to_icon(CLEAR_DONE_SVG, 20))
-        self._btn_clear_done.setIconSize(QSize(20, 20))
-        self._btn_clear_done.setFixedSize(32, 32)
+        self._btn_clear_done.setMinimumHeight(36)
         self._btn_clear_done.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_clear_done.clicked.connect(self.clear_completed_clicked.emit)
         layout.addWidget(self._btn_clear_done)
 
         self._btn_trash = QToolButton(self)
         self._btn_trash.setObjectName("headerTrash")
-        self._btn_trash.setAccessibleName("Abrir lixeira")
-        self._btn_trash.setToolTip("Abrir lixeira")
+        self._btn_trash.setAccessibleName("Abrir Lixeira de tasks")
+        self._btn_trash.setToolTip("Lixeira (tasks ocultas até 30 dias)")
         self._btn_trash.setIcon(svg_to_icon(TRASH_SVG, 20))
         self._btn_trash.setIconSize(QSize(20, 20))
-        self._btn_trash.setFixedSize(32, 32)
+        self._btn_trash.setFixedSize(36, 36)
         self._btn_trash.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_trash.clicked.connect(self.trash_clicked.emit)
         layout.addWidget(self._btn_trash)
@@ -130,8 +129,12 @@ class HeaderBar(QWidget):
         self._btn_clear_done.setEnabled(has_visible_done)
         if not has_visible_done:
             self._btn_clear_done.setToolTip("Nenhuma task concluída visível")
+            self._btn_clear_done.setAccessibleName(
+                "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
+            )
         else:
-            self._btn_clear_done.setToolTip("Ocultar tasks concluídas")
+            self._btn_clear_done.setToolTip("")
+            self._btn_clear_done.setAccessibleName("Mover tasks concluídas para a Lixeira")
 
     # ------------------------------------------------------------------
     # Search

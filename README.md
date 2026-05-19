@@ -129,7 +129,14 @@ Clique no **menu de três pontos** (⋮) em qualquer card de task → "Deletar" 
 
 Para tarefas importantes, **use soft-delete** ("Limpar concluídas") e deixe na Lixeira até ter certeza de que não será necessário recuperá-las. Reserve hard-delete apenas para duplicatas óbvias ou erros de entrada.
 
-**Nota sobre backup:** A Lixeira é local no banco de dados. Se o arquivo `~/.local/share/task-manager-desktop/tasks.db` for perdido ou corrompido, nenhuma recovery será possível. Mantenha backups regulares para proteção máxima.
+**Backup manual (recomendado):**
+
+```bash
+cp ~/.local/share/task-manager-desktop/tasks.db \
+   ~/backup/tasks.db.$(date +%Y%m%d)
+```
+
+A Lixeira é local e não tem redundância automática — backups periódicos são a única proteção contra perda de dados.
 
 ---
 

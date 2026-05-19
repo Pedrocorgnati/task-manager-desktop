@@ -309,10 +309,12 @@ def test_gap008_uxdef_tooltip_on_primary_actions(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
     assert bar.btn_new.toolTip() == "Nova task (Ctrl+N)"
-    # Clear done button has dynamic tooltip: disabled shows "Nenhuma", enabled shows "Ocultar"
+    # Clear done button: disabled shows "Nenhuma", enabled has no tooltip (label is self-explanatory)
+    bar.set_clear_done_enabled(False)
+    assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
     bar.set_clear_done_enabled(True)
-    assert bar._btn_clear_done.toolTip() == "Ocultar tasks concluídas"
-    assert bar._btn_trash.toolTip() == "Abrir lixeira"
+    assert bar._btn_clear_done.toolTip() == ""
+    assert bar._btn_trash.toolTip() == "Lixeira (tasks ocultas até 30 dias)"
     assert "Ctrl+F" in bar._search.placeholderText(), (
         "Placeholder do search deve documentar o atalho Ctrl+F (UX-DEF)."
     )

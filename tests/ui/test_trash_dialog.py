@@ -72,7 +72,8 @@ def test_trash_dialog_row_shows_id_title_and_date(qtbot, repo):
 
     assert any(lbl.text() == "abc" for lbl in id_labels)
     assert any("Refactor header" in lbl.text() for lbl in title_labels)
-    assert any("2026-05-17" in lbl.text() for lbl in date_labels)
+    # Date format is DD/MM/YYYY HH:MM (pt-BR)
+    assert any("17/05/2026" in lbl.text() for lbl in date_labels)
 
 
 def test_trash_dialog_restore_removes_row_and_calls_repo(qtbot, repo):
@@ -117,3 +118,66 @@ def test_trash_dialog_reload_refreshes_rows(qtbot, repo):
     repo.hide_all_done()
     dlg.reload()
     assert set(dlg.row_ids()) == {"a", "b"}
+
+
+def test_trash_dialog_refresh_is_alias_for_reload(qtbot, repo):
+    _seed_done(repo, "a")
+    repo.hide_all_done()
+
+    dlg = TrashDialog(repo)
+    qtbot.addWidget(dlg)
+    assert dlg.row_ids() == ["a"]
+
+    _seed_done(repo, "b")
+    repo.hide_all_done()
+    dlg.refresh()
+    assert set(dlg.row_ids()) == {"a", "b"}
+
+
+def test_trash_dialog_fixed_size(qtbot, repo):
+    dlg = TrashDialog(repo)
+    qtbot.addWidget(dlg)
+    assert dlg.width() == 520
+    assert dlg.height() == 360
+    assert dlg.minimumWidth() == 520
+    assert dlg.maximumWidth() == 520
+
+
+def test_trash_dialog_empty_state_text(qtbot, repo):
+    dlg = TrashDialog(repo)
+    qtbot.addWidget(dlg)
+    placeholder = dlg.findChild(QLabel, "trashEmptyPlaceholder")
+    assert placeholder is not None
+    assert placeholder.text() == "A Lixeira está vazia."
+
+
+def test_trash_dialog_has_subtitle(qtbot, repo):
+    dlg = TrashDialog(repo)
+    qtbot.addWidget(dlg)
+    subtitle = dlg.findChild(QLabel, "trashSubtitle")
+    assert subtitle is not None
+    assert "30 dias" in subtitle.text()
+
+
+def test_trash_dialog_date_format_ptbr(qtbot, repo):
+    _seed_done(repo, "x", completed_at="2026-05-14T09:45:00")
+    repo.hide_all_done()
+
+    dlg = TrashDialog(repo)
+    qtbot.addWidget(dlg)
+
+    date_labels = dlg.findChildren(QLabel, "trashRowDate")
+    assert any("14/05/2026" in lbl.text() for lbl in date_labels)
+    assert any("09:45" in lbl.text() for lbl in date_labels)
+
+
+def test_trash_dialog_restore_btn_has_accessible_name(qtbot, repo):
+    _seed_done(repo, "a", title="Minha task longa")
+    repo.hide_all_done()
+
+    dlg = TrashDialog(repo)
+    qtbot.addWidget(dlg)
+
+    btn = dlg.findChild(QPushButton, "trashRowRestore")
+    assert btn is not None
+    assert "Minha task longa" in btn.accessibleName()

@@ -104,7 +104,8 @@ class TestClearDoneButton:
         qtbot.addWidget(bar)
         bar.set_clear_done_enabled(True)
         assert bar._btn_clear_done.isEnabled()
-        assert "Ocultar tasks concluídas" in bar._btn_clear_done.toolTip()
+        # Tooltip is intentionally empty when enabled — button label "Limpar concluídas" is self-explanatory
+        assert bar._btn_clear_done.toolTip() == ""
 
     def test_button_disabled_when_no_done(self, qtbot):
         """Scenario: Button disabled when no visible done tasks."""

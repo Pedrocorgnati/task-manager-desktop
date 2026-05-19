@@ -89,7 +89,7 @@ class TestTrashDialogEmpty:
         # Check that placeholder is visible
         placeholder = dialog._placeholder
         assert placeholder is not None
-        assert "Nenhuma task na lixeira" in placeholder.text()
+        assert "A Lixeira está vazia." in placeholder.text()
 
     def test_empty_state_centered(self, qtbot, mock_repo):
         """Empty state label is centered."""
