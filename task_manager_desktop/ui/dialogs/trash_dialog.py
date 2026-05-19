@@ -144,7 +144,7 @@ class TrashDialog(QDialog):
         lbl_id.setObjectName("trashRowId")
         lbl_id.setFixedWidth(80)
 
-        lbl_title = QLabel(_elide(task.title or "(sem titulo)"), row)
+        lbl_title = QLabel(_elide(task.title or "(sem título)"), row)
         lbl_title.setObjectName("trashRowTitle")
         lbl_title.setMinimumWidth(240)
 

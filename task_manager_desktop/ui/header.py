@@ -83,8 +83,8 @@ class HeaderBar(QWidget):
 
         self._btn_clear_done = QToolButton(self)
         self._btn_clear_done.setObjectName("headerClearDone")
-        self._btn_clear_done.setAccessibleName("Ocultar concluidas")
-        self._btn_clear_done.setToolTip("Ocultar tasks concluidas")
+        self._btn_clear_done.setAccessibleName("Ocultar concluídas")
+        self._btn_clear_done.setToolTip("Ocultar tasks concluídas")
         self._btn_clear_done.setIcon(svg_to_icon(CLEAR_DONE_SVG, 20))
         self._btn_clear_done.setIconSize(QSize(20, 20))
         self._btn_clear_done.setFixedSize(32, 32)
