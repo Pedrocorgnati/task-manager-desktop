@@ -4,9 +4,11 @@ import sqlite3
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QDropEvent
+from PySide6.QtGui import QColor, QDrag, QDropEvent, QImage, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QListWidget,
     QListWidgetItem,
@@ -25,15 +27,22 @@ if TYPE_CHECKING:
 _SECTOR_ORDER = [Sector.ACTIVE, Sector.WAITING, Sector.BLOCKED, Sector.DONE]
 
 _SECTOR_LABELS = {
-    Sector.ACTIVE: "— Em execução —",
-    Sector.WAITING: "— A fazer —",
-    Sector.BLOCKED: "— Bloqueadas —",
-    Sector.DONE: "— Concluídas —",
+    Sector.ACTIVE: "Em execução",
+    Sector.WAITING: "Fila",
+    Sector.BLOCKED: "Bloqueadas",
+    Sector.DONE: "Concluídas",
 }
 
 _ROLE_TYPE = Qt.ItemDataRole.UserRole + 1  # "separator" | "task" | "placeholder"
 _ROLE_TASK_ID = Qt.ItemDataRole.UserRole + 2  # str task id
 _ROLE_SECTOR = Qt.ItemDataRole.UserRole + 3  # Sector.value int
+
+_SECTOR_COLORS = {
+    Sector.ACTIVE: "#22C55E",
+    Sector.WAITING: "#EAB308",
+    Sector.BLOCKED: "#A1A1AA",
+    Sector.DONE: "#686C78",
+}
 
 
 def _task_sector(task: Task, all_tasks: dict[str, Task]) -> Sector:
@@ -53,7 +62,7 @@ class _InnerList(QListWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setObjectName("taskListWidget")
-        self.setSpacing(2)
+        self.setSpacing(3)
 
     # ------------------------------------------------------------------
     # Keyboard navigation — belt-and-suspenders (window shortcuts primary)
@@ -108,6 +117,31 @@ class _InnerList(QListWidget):
     # ------------------------------------------------------------------
     # Drag-and-drop
     # ------------------------------------------------------------------
+
+    def startDrag(self, supported_actions: Qt.DropAction) -> None:
+        item = self.currentItem()
+        if item is None or item.data(_ROLE_TYPE) != "task":
+            super().startDrag(supported_actions)
+            return
+        widget = self.itemWidget(item)
+        if widget is None:
+            super().startDrag(supported_actions)
+            return
+
+        src = widget.grab()
+        ghost = QPixmap(src.size())
+        ghost.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(ghost)
+        painter.setOpacity(0.6)
+        painter.drawPixmap(0, 0, src)
+        painter.end()
+
+        drag = QDrag(self)
+        mime = self.model().mimeData(self.selectedIndexes())
+        drag.setMimeData(mime)
+        drag.setPixmap(ghost)
+        drag.setHotSpot(ghost.rect().center())
+        drag.exec(supported_actions)
 
     def dropEvent(self, event: QDropEvent) -> None:
         source_row = self.currentRow()
@@ -232,17 +266,28 @@ class TaskList(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def refresh(self, tasks: list[Task] | None = None) -> None:
+    def refresh(self, tasks: list[Task] | None = None, pulse_task_id: str | None = None) -> None:
         """Rebuild the list.
 
         If tasks is provided, update the cached list and rebuild.
         If tasks is None, reload from repo (if available) or rebuild from cache.
+        pulse_task_id: if set, the matching card will play a brief pulse animation after rebuild.
         """
         if tasks is not None:
             self._tasks = tasks
         elif self._repo is not None:
             self._tasks = self._repo.list_active()
         self._rebuild(self._tasks)
+        if pulse_task_id:
+            self._pulse_card(pulse_task_id)
+
+    def _pulse_card(self, task_id: str) -> None:
+        from task_manager_desktop.ui.task_card import TaskCard
+
+        for card in self._cards:
+            if isinstance(card, TaskCard) and card._task.id == task_id:
+                card.pulse()
+                break
 
     def set_filters(self, query: str | None, projeto: str | None) -> None:
         self._query = (query or "").strip()
@@ -343,12 +388,13 @@ class TaskList(QWidget):
             else list(tasks)
         )
 
-        empty_no_tasks = not tasks and not filter_active
+        # CL-030: banco vazio exibe 4 headers + placeholder; empty_label so para "sem resultados de filtro"
         filter_no_match = filter_active and not visible_tasks
+        empty_no_tasks = not tasks and not filter_active
 
-        self._empty_label.setVisible(empty_no_tasks)
+        self._empty_label.setVisible(False)
         self._empty_filter_label.setVisible(filter_no_match)
-        self._inner.setVisible(not empty_no_tasks and not filter_no_match)
+        self._inner.setVisible(not filter_no_match)
 
         if filter_no_match:
             return
@@ -376,16 +422,36 @@ class TaskList(QWidget):
         item.setData(_ROLE_TYPE, "separator")
         item.setData(_ROLE_SECTOR, sector.value)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
-        item.setSizeHint(QSize(-1, 32))
-        item.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        item.setSizeHint(QSize(1, 34))
         self._inner.addItem(item)
+
+        row = QWidget(self._inner)
+        row.setObjectName("sectorHeaderRow")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(6, 6, 6, 3)
+        layout.setSpacing(10)
+
+        title = QLabel(_SECTOR_LABELS[sector].upper(), row)
+        title.setObjectName("sectorTitle")
+        title.setMinimumWidth(140)
+        title.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+        title.setStyleSheet(f"color: {_SECTOR_COLORS[sector]};")
+        layout.addWidget(title)
+
+        rule = QFrame(row)
+        rule.setObjectName("sectorRule")
+        rule.setFrameShape(QFrame.Shape.HLine)
+        rule.setStyleSheet(f"background: {_SECTOR_COLORS[sector]}; border: none;")
+        layout.addWidget(rule, 1)
+
+        self._inner.setItemWidget(item, row)
 
     def _add_placeholder(self, sector: Sector) -> None:
         item = QListWidgetItem("vazio")
         item.setData(_ROLE_TYPE, "placeholder")
         item.setData(_ROLE_SECTOR, sector.value)
         item.setFlags(Qt.ItemFlag.NoItemFlags)
-        item.setSizeHint(QSize(-1, 28))
+        item.setSizeHint(QSize(1, 22))
         item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         item.setForeground(QColor(PALETTE["TEXT_MUTED"]))
         self._inner.addItem(item)
@@ -409,7 +475,7 @@ class TaskList(QWidget):
             | Qt.ItemFlag.ItemIsDragEnabled
             | Qt.ItemFlag.ItemIsDropEnabled
         )
-        item.setSizeHint(QSize(-1, 72))
+        item.setSizeHint(QSize(1, 116))
         self._inner.addItem(item)
 
         card = TaskCard(task, self._callbacks, all_tasks_list, self._inner)

@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QHideEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QHBoxLayout,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -25,11 +24,10 @@ if TYPE_CHECKING:
 
 
 class MarkdownPane(QWidget):
-    """Painel direito — orquestra viewer e editor de notas Markdown.
+    """Painel direito de notas Markdown.
 
-    QStackedWidget:
-      index 0 = viewer page (MarkdownViewer + botão Editar overlay)
-      index 1 = editor page (EditorToolbar + MarkdownEditor)
+    O fluxo principal e editor-first: ao selecionar uma task, as notas ficam
+    editaveis imediatamente. O viewer existe como preview alternavel.
     """
 
     notes_saved = Signal(str, str)   # (task_id, new_notes)
@@ -50,9 +48,8 @@ class MarkdownPane(QWidget):
         self.setObjectName("markdownPane")
         self.setAccessibleName("Painel de notas")
 
-        # --- Viewer page ---
-        self._viewer = MarkdownViewer(self)
-
+        # Botao mantido apenas como alias de retrocompatibilidade para testes/codigo antigo.
+        # Ele nao entra no layout visual: a edicao agora e sempre direta.
         self._edit_btn = QPushButton("Editar", self)
         self._edit_btn.setObjectName("editButton")
         self._edit_btn.setProperty("class", "edit-btn")
@@ -60,53 +57,31 @@ class MarkdownPane(QWidget):
         self._edit_btn.setAccessibleName("Entrar no modo editor de notas")
         self._edit_btn.setVisible(False)
 
-        viewer_page = QWidget(self)
-        viewer_layout = QVBoxLayout(viewer_page)
-        viewer_layout.setContentsMargins(0, 0, 0, 0)
-        viewer_layout.setSpacing(0)
-
-        # Topbar with stretch + edit button
-        topbar = QHBoxLayout()
-        topbar.setContentsMargins(0, 8, 12, 0)
-        topbar.setSpacing(0)
-        topbar.addStretch()
-        topbar.addWidget(self._edit_btn)
-        viewer_layout.addLayout(topbar)
-        viewer_layout.addWidget(self._viewer, 1)
-
-        # --- Editor page ---
+        # --- Header + pages ---
         self._toolbar = EditorToolbar(self)
+        self._viewer = MarkdownViewer(self)
         self._editor = MarkdownEditor(self)
-
-        editor_page = QWidget(self)
-        editor_layout = QVBoxLayout(editor_page)
-        editor_layout.setContentsMargins(0, 0, 0, 0)
-        editor_layout.setSpacing(0)
-        editor_layout.addWidget(self._toolbar)
-        editor_layout.addWidget(self._editor, 1)
 
         # --- Stack ---
         self._stack = QStackedWidget(self)
-        self._stack.addWidget(viewer_page)   # index 0
-        self._stack.addWidget(editor_page)   # index 1
+        self._stack.addWidget(self._viewer)   # index 0
+        self._stack.addWidget(self._editor)   # index 1
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        outer.addWidget(self._stack)
+        outer.addWidget(self._toolbar)
+        outer.addWidget(self._stack, 1)
 
         # Wire-up
         self._edit_btn.clicked.connect(self._enter_editor)
         self._toolbar.save_requested.connect(self._save)
         self._toolbar.cancel_requested.connect(self._cancel)
+        self._toolbar.toggle_preview_requested.connect(self._toggle_preview)
 
         self._save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self._editor)
         self._save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._save_shortcut.activated.connect(self._save)
-
-        self._cancel_shortcut = QShortcut(QKeySequence("Esc"), self._editor)
-        self._cancel_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        self._cancel_shortcut.activated.connect(self._cancel)
 
         self.set_task(None)
 
@@ -114,10 +89,9 @@ class MarkdownPane(QWidget):
     # Public API
     # ------------------------------------------------------------------
     def set_task(self, task: Task | None) -> None:
-        """Define a task ativa. Faz save implícito se havia edição pendente."""
+        """Define a task ativa. Faz save implicito se havia edicao pendente."""
         if (
-            self._stack.currentIndex() == self._IDX_EDITOR
-            and self._current_task is not None
+            self._current_task is not None
             and self._editor.toPlainText() != (self._current_task.notes or "")
         ):
             self._implicit_save()
@@ -125,12 +99,23 @@ class MarkdownPane(QWidget):
         self._current_task = task
         self._viewer.set_task(task)
         self._editor.setPlainText(task.notes if task else "")
-        self._edit_btn.setVisible(task is not None)
-        self._stack.setCurrentIndex(self._IDX_VIEWER)
-        self.editing_changed.emit(False)
+        self._edit_btn.setVisible(False)
+        self._editor.setEnabled(task is not None)
+        self._toolbar.set_task_enabled(task is not None)
+        if task is None:
+            self._stack.setCurrentIndex(self._IDX_VIEWER)
+            self._toolbar.set_preview_mode(True)
+            self.editing_changed.emit(False)
+        else:
+            self._stack.setCurrentIndex(self._IDX_EDITOR)
+            self._toolbar.set_preview_mode(False)
+            self.editing_changed.emit(True)
 
     def is_editing(self) -> bool:
-        return self._stack.currentIndex() == self._IDX_EDITOR
+        return (
+            self._current_task is not None
+            and self._editor.toPlainText() != (self._current_task.notes or "")
+        )
 
     def current_task_id(self) -> str | None:
         return self._current_task.id if self._current_task is not None else None
@@ -171,41 +156,63 @@ class MarkdownPane(QWidget):
     def _enter_editor(self) -> None:
         if self._current_task is None:
             return
-        self._editor.setPlainText(self._current_task.notes or "")
         self._stack.setCurrentIndex(self._IDX_EDITOR)
+        self._toolbar.set_preview_mode(False)
         self._editor.setFocus(Qt.FocusReason.ShortcutFocusReason)
         self.editing_changed.emit(True)
 
-    def _save(self) -> None:
-        if self._current_task is None or self._repo is None:
+    def _toggle_preview(self) -> None:
+        if self._current_task is None:
             return
+        if self._stack.currentIndex() == self._IDX_EDITOR:
+            preview_task = dataclasses.replace(
+                self._current_task,
+                notes=self._editor.toPlainText(),
+            )
+            self._viewer.set_task(preview_task)
+            self._editor.clearFocus()
+            self._stack.setCurrentIndex(self._IDX_VIEWER)
+            self._toolbar.set_preview_mode(True)
+            self.editing_changed.emit(False)
+        else:
+            self._enter_editor()
+
+    def _save(self) -> None:
+        if self._current_task is None:
+            return
+        current_index = self._stack.currentIndex()
         new_notes = self._editor.toPlainText()
         self._toolbar.btn_save.setEnabled(False)
         self._toolbar.btn_save.setText("Salvando...")
+        self._toolbar.btn_toggle.setEnabled(False)
         self._editor.setReadOnly(True)
         try:
-            self._repo.update_notes(self._current_task.id, new_notes)
+            if self._repo is not None:
+                self._repo.update_notes(self._current_task.id, new_notes)
         except (TaskNotFoundError, sqlite3.OperationalError, sqlite3.IntegrityError, OSError) as exc:
-            self._show_io_error(exc)
-            return
+            # CL-085: erros de save de nota mostram Toast nao-bloqueante; editor permanece aberto
+            self._show_save_error_toast(exc)
+            return  # mantem stack em IDX_EDITOR
         finally:
             self._toolbar.btn_save.setEnabled(True)
+            self._toolbar.btn_toggle.setEnabled(True)
             self._toolbar.btn_save.setText("Salvar")
             self._editor.setReadOnly(False)
         try:
             self._current_task = dataclasses.replace(self._current_task, notes=new_notes)
         except Exception:  # noqa: BLE001
             pass
-        self._editor.clearFocus()
         self._viewer.set_task(self._current_task)
-        self._stack.setCurrentIndex(self._IDX_VIEWER)
-        self.editing_changed.emit(False)
+        self._stack.setCurrentIndex(current_index)
+        self._toolbar.set_preview_mode(current_index == self._IDX_VIEWER)
+        self.editing_changed.emit(current_index == self._IDX_EDITOR)
         self.notes_saved.emit(self._current_task.id, new_notes)
 
     def _cancel(self) -> None:
         self._editor.setPlainText(self._current_task.notes if self._current_task else "")
         self._editor.clearFocus()
         self._stack.setCurrentIndex(self._IDX_VIEWER)
+        self._toolbar.set_preview_mode(True)
         self.editing_changed.emit(False)
 
     def _implicit_save(self) -> None:
@@ -229,13 +236,18 @@ class MarkdownPane(QWidget):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+    def _show_save_error_toast(self, exc: BaseException) -> None:
+        """Toast nao-bloqueante para falhas de save de notas (CL-085)."""
+        self._show_toast_warning(f"Erro ao salvar: {exc}")
+
     def _show_io_error(self, exc: BaseException) -> None:
+        """ErrorDialog modal para erros criticos irrecuperaveis de I/O do banco."""
         try:
             from task_manager_desktop.ui.dialogs import ErrorDialog
         except Exception:  # noqa: BLE001
             return
-        db_path = getattr(self._repo, "db_path", "") or "" if self._repo else ""
-        ErrorDialog.show_io_error(self, exc, db_path)
+        db_path = getattr(self._repo, "db_path", "") if self._repo else ""
+        ErrorDialog.show_io_error(self, exc, str(db_path))
 
     def _show_toast_warning(self, message: str) -> None:
         try:

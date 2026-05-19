@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QByteArray, Qt
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtGui import QFont, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication
 
@@ -39,6 +39,7 @@ def main() -> None:
     app.setOrganizationName("task-manager-desktop")
     app.setApplicationName("task-manager-desktop")
     app.setWindowIcon(_build_app_icon())
+    app.setFont(QFont("Ubuntu Sans", 13))
 
     if THEME_QSS_PATH.exists():
         app.setStyleSheet(THEME_QSS_PATH.read_text(encoding="utf-8"))
@@ -50,6 +51,21 @@ def main() -> None:
         return
     except OSError as exc:
         _show_error_and_exit(exc, "")
+        return
+
+    try:
+        from .core.desktop_entry import ensure_desktop_integration
+        ensure_desktop_integration()
+    except Exception as exc:  # noqa: BLE001
+        print(f"[desktop-entry] Falha nao critica: {exc}", file=sys.stderr)
+
+    try:
+        from .core.db import get_connection, validate_database
+
+        _boot_conn = get_connection(db_path)
+        validate_database(_boot_conn)
+    except Exception as exc:  # noqa: BLE001
+        _show_error_and_exit(exc, str(db_path))
         return
 
     try:
@@ -67,7 +83,7 @@ def main() -> None:
 
     from .repositories.task_repository import TaskRepository
 
-    repo = TaskRepository(conn, db_path=str(db_path))
+    repo = TaskRepository(conn, db_path=db_path)
 
     window = MainWindowShell()
 

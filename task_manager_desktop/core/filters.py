@@ -7,6 +7,9 @@ ALL_PROJECTS_SENTINEL = "__all__"
 
 def matches(task: Task, query: str | None, projeto: str | None) -> bool:
     if projeto and projeto != ALL_PROJECTS_SENTINEL:
+        # CL-052: case-insensitive intencional — coerente com CL-122 (busca). Todos os projetos
+        # passam por normalize_projeto antes de persistir; casefold aqui so afeta projetos criados
+        # com letras maiusculas. Decisao registrada em INTAKE-CHECKLIST.md.
         if (task.projeto or "").casefold() != projeto.casefold():
             return False
 

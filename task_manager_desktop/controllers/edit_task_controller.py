@@ -64,7 +64,7 @@ class EditTaskController(QObject):
                 deps=clean_deps,
             )
         except sqlite3.Error as exc:
-            ErrorDialog.show_io_error(parent_widget, exc, "")
+            ErrorDialog.show_io_error(parent_widget, exc, str(self._repo.db_path))
             return False
         finally:
             QApplication.restoreOverrideCursor()
@@ -93,7 +93,7 @@ class EditTaskController(QObject):
                 completed_at = datetime.now(timezone.utc).isoformat()
             self._repo.update(task.id, status=Status(new_status), completed_at=completed_at)
         except sqlite3.Error as exc:
-            ErrorDialog.show_io_error(parent_widget, exc, "")
+            ErrorDialog.show_io_error(parent_widget, exc, str(self._repo.db_path))
             return
 
         self._task_list.refresh(self._repo.list_active())

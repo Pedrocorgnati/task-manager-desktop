@@ -40,11 +40,12 @@ def test_set_selected_toggles_style(qtbot, calls_and_cbs):
     card.set_selected(True)
     assert card._selected is True
     assert card.property("selected") is True
-    assert "border-right" in card.styleSheet()
+    # CL-079: faixa de selecao no lado ESQUERDO (border-left)
+    assert "border-left: 3px solid #FFFFFF" in card.styleSheet()
 
     card.set_selected(False)
     assert card._selected is False
-    assert "border-right" not in card.styleSheet()
+    assert "border-left: 3px solid #FFFFFF" not in card.styleSheet()
 
 
 def test_on_status_change_invokes_callback(qtbot, calls_and_cbs):

@@ -36,6 +36,12 @@ class MarkdownViewer(QWidget):
         self._browser.setOpenLinks(False)
         self._browser.anchorClicked.connect(self._on_anchor_clicked)
 
+        try:
+            from task_manager_desktop.core.bootstrap import notes_assets_path
+            self._browser.setSearchPaths([str(notes_assets_path())])
+        except Exception:  # noqa: BLE001
+            pass
+
         self._empty = EmptyStateLabel("", parent=self)
         self._empty.setAccessibleName("Sem task selecionada")
 
@@ -54,7 +60,7 @@ class MarkdownViewer(QWidget):
             self._browser.setVisible(False)
             self._empty.setVisible(True)
         elif not task.notes:
-            self._empty.set_text("Sem notas ainda. Clique em Editar para adicionar.")
+            self._empty.set_text("Sem notas ainda. Volte para Editar e escreva a primeira nota.")
             self._empty.setAccessibleName("Task sem notas")
             self._browser.setVisible(False)
             self._empty.setVisible(True)

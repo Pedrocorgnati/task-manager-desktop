@@ -8,9 +8,10 @@ WINDOW_MIN_W: int = 900
 WINDOW_MIN_H: int = 600
 
 SPLITTER_SIZES: list[int] = [560, 840]
+SPLITTER_RATIO: float = 0.4
 
-FONT_FAMILY_BODY = "Inter, Segoe UI, system-ui, sans-serif"
-FONT_FAMILY_MONO = "JetBrains Mono, Cascadia Code, Consolas, monospace"
+FONT_FAMILY_BODY = "Ubuntu Sans, Noto Sans, DejaVu Sans, sans-serif"
+FONT_FAMILY_MONO = "JetBrains Mono, Ubuntu Mono, Fira Code, monospace"
 
 TOOLBAR_H: int = 48
 
@@ -20,11 +21,11 @@ TOAST_FADE_OUT_MS: int = 400
 TOAST_OFFSET: int = 24
 
 PALETTE: dict[str, str] = {
-    "BG_BASE": "#18181B",
-    "BG_PANEL": "#1F1F23",
-    "BG_CARD": "#27272A",
+    "BG_BASE": "#0D0E12",
+    "BG_PANEL": "#14151B",
+    "BG_CARD": "#24262D",
     "BORDER_STRONG": "#3F3F46",
-    "TEXT_PRIMARY": "#FAFAFA",
+    "TEXT_PRIMARY": "#F8FAFC",
     "TEXT_SECONDARY": "#A1A1AA",
     "TEXT_MUTED": "#71717A",
     "COLOR_SUCCESS": "#16A34A",

@@ -51,7 +51,9 @@ def test_btn_edit_hidden_when_no_task(pane):
 
 def test_btn_edit_visible_after_set_task(pane, sample_task):
     pane.set_task(sample_task)
-    assert pane.btn_edit.isVisibleTo(pane)
+    assert not pane.btn_edit.isVisibleTo(pane)
+    assert pane.toolbar.btn_save.isEnabled()
+    assert pane.toolbar.btn_toggle.isEnabled()
 
 
 # ── Transição viewer → editor ────────────────────────────────────────────────
@@ -59,10 +61,8 @@ def test_btn_edit_visible_after_set_task(pane, sample_task):
 
 def test_edit_button_switches_to_editor(qtbot, pane, sample_task):
     pane.show()
-    pane.set_task(sample_task)
-    assert pane.stack.currentIndex() == 0
     with qtbot.waitSignal(pane.editing_changed) as blocker:
-        qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
+        pane.set_task(sample_task)
     assert blocker.args == [True]
     assert pane.stack.currentIndex() == 1
     assert pane.editor.toPlainText() == sample_task.notes
@@ -75,14 +75,12 @@ def test_edit_button_switches_to_editor(qtbot, pane, sample_task):
 def test_cancel_returns_to_viewer_with_original(qtbot, pane, sample_task):
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("# modificado")
     with qtbot.waitSignal(pane.editing_changed) as blocker:
         pane.toolbar.cancel_requested.emit()
     assert blocker.args == [False]
     assert pane.stack.currentIndex() == 0
-    # Re-entrar no editor deve mostrar conteúdo original
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
+    pane.toolbar.toggle_preview_requested.emit()
     assert pane.editor.toPlainText() == sample_task.notes
     pane.hide()
 
@@ -93,16 +91,15 @@ def test_cancel_returns_to_viewer_with_original(qtbot, pane, sample_task):
 def test_set_task_resets_to_viewer(qtbot, pane, sample_task, sample_task_b):
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     assert pane.stack.currentIndex() == 1
     pane.set_task(sample_task_b)
-    assert pane.stack.currentIndex() == 0
+    assert pane.stack.currentIndex() == 1
     pane.hide()
 
 
 def test_set_task_none_hides_edit_button(pane, sample_task):
     pane.set_task(sample_task)
-    assert pane.btn_edit.isVisibleTo(pane)
+    assert not pane.btn_edit.isVisibleTo(pane)
     pane.set_task(None)
     assert not pane.btn_edit.isVisibleTo(pane)
 
@@ -112,10 +109,9 @@ def test_set_task_none_hides_edit_button(pane, sample_task):
 
 def test_editing_changed_emitted_true_on_edit(qtbot, pane, sample_task):
     pane.show()
-    pane.set_task(sample_task)
     signals = []
     pane.editing_changed.connect(signals.append)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
+    pane.set_task(sample_task)
     assert signals == [True]
     pane.hide()
 
@@ -123,7 +119,6 @@ def test_editing_changed_emitted_true_on_edit(qtbot, pane, sample_task):
 def test_editing_changed_emitted_false_on_cancel(qtbot, pane, sample_task):
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     signals = []
     pane.editing_changed.connect(signals.append)
     pane.toolbar.cancel_requested.emit()

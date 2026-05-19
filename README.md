@@ -19,6 +19,16 @@ Restricoes do MVP: sem CI/CD, sem PyInstaller, sem sync com servicos externos.
 
 ---
 
+## Plataformas suportadas
+
+- Ubuntu 22.04 LTS (Jammy Jellyfish) — testado oficialmente
+- Ubuntu 24.04 LTS (Noble Numbat) — testado oficialmente
+
+Outras distros Linux com Qt 6.4+ e Python 3.10+ devem funcionar, mas nao sao testadas oficialmente.
+Windows e macOS nao sao suportados no MVP.
+
+---
+
 ## Requisitos
 
 - Python 3.10+
@@ -26,6 +36,40 @@ Restricoes do MVP: sem CI/CD, sem PyInstaller, sem sync com servicos externos.
 - `xdg-utils` (pacote do SO para `xdg-open`)
 
 Nota: PySide6 instala via pip e nao requer build-deps adicionais no Ubuntu.
+
+---
+
+## Instalacao
+
+```bash
+git clone git@github.com:Pedrocorgnati/task-manager-desktop.git
+cd task-manager-desktop
+python3 -m venv .venv
+.venv/bin/pip install -e .
+```
+
+Na primeira execucao com `task-manager` (ou `.venv/bin/task-manager`), o app:
+1. Cria o diretorio de dados `~/.local/share/task-manager-desktop/` com permissoes `0700`
+2. Instala o icone em `~/.local/share/icons/task-manager-desktop.svg`
+3. Cria o atalho `~/.local/share/applications/task-manager-desktop.desktop`
+
+Apos a primeira execucao, o app aparece no menu de aplicativos do GNOME com o icone correto.
+
+**Instalacao manual do .desktop (alternativa global):**
+
+```bash
+# Copia para diretorio do sistema (requer sudo)
+sudo cp ~/.local/share/applications/task-manager-desktop.desktop /usr/share/applications/
+# Atualiza o banco de dados de menus
+sudo update-desktop-database /usr/share/applications/
+```
+
+**Validacao do .desktop:**
+
+```bash
+desktop-file-validate ~/.local/share/applications/task-manager-desktop.desktop
+# exit 0 esperado
+```
 
 ---
 
@@ -67,6 +111,23 @@ Sem selecao: no-op silencioso.
 - Banco de dados: `~/.local/share/task-manager-desktop/tasks.db`
 - Diretorio criado automaticamente na primeira execucao com modo `0700`
 - Preferencias de janela (geometry/window state): `~/.config/task-manager-desktop/`
+
+---
+
+## Imagens em notas
+
+O viewer de Markdown suporta imagens locais. Para referenciar uma imagem em uma nota:
+
+1. Copie o arquivo para `~/.local/share/task-manager-desktop/notes-assets/`
+2. Na nota, use `![descricao](nome-do-arquivo.png)`
+
+Exemplo:
+
+```markdown
+![diagrama](fluxo.png)
+```
+
+Imagens ausentes renderizam o placeholder padrao do Qt (sem crash). Imagens externas (HTTP/HTTPS) nao sao carregadas automaticamente por seguranca.
 
 ---
 

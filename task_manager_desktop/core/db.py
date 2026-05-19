@@ -66,6 +66,14 @@ def run_migrations(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
+def validate_database(conn: sqlite3.Connection) -> None:
+    """Executa PRAGMA integrity_check. Levanta DatabaseError se banco estiver corrompido."""
+    row = conn.execute("PRAGMA integrity_check").fetchone()
+    result = row[0] if row else "error"
+    if result != "ok":
+        raise sqlite3.DatabaseError(f"integrity_check falhou: {result}")
+
+
 def close_connection() -> None:
     """Fecha e limpa a conexao singleton (para uso em testes)."""
     global _connection

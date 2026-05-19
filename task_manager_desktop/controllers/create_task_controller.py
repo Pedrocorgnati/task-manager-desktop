@@ -55,7 +55,7 @@ class CreateTaskController(QObject):
             conn = self._repo._conn
             task_id = generate_id(conn)
         except RuntimeError as exc:
-            ErrorDialog.show_io_error(parent_widget, exc, "")
+            ErrorDialog.show_io_error(parent_widget, exc, str(self._repo.db_path))
             return False
 
         clean_deps, cycle_desc = resolve_cycles(task_id, data["deps"], all_tasks_dict)
@@ -68,13 +68,14 @@ class CreateTaskController(QObject):
             projeto=data["projeto"],
             deps=clean_deps,
             created_at=datetime.now(timezone.utc).isoformat(),
+            order_index=max((t.order_index for t in all_tasks), default=0) + 1,
         )
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self._repo.create(task)
         except sqlite3.Error as exc:
-            ErrorDialog.show_io_error(parent_widget, exc, "")
+            ErrorDialog.show_io_error(parent_widget, exc, str(self._repo.db_path))
             return False
         finally:
             QApplication.restoreOverrideCursor()

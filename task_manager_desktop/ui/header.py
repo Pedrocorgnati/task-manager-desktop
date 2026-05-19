@@ -30,7 +30,7 @@ class HeaderBar(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setFixedHeight(52)
+        self.setFixedHeight(58)
         self.setObjectName("HeaderBar")
         self.setAccessibleName("Barra de cabeçalho")
 
@@ -51,7 +51,7 @@ class HeaderBar(QWidget):
 
         self.btn_new = QPushButton("+", self)
         self.btn_new.setProperty("class", "primary")
-        self.btn_new.setFixedSize(36, 36)
+        self.btn_new.setFixedSize(40, 40)
         self.btn_new.setToolTip("Nova task (Ctrl+N)")
         self.btn_new.setAccessibleName("Criar nova task")
         self.btn_new.setAccessibleDescription("Atalho Ctrl+N")
@@ -66,7 +66,7 @@ class HeaderBar(QWidget):
         self._search.setAccessibleName("Campo de busca por título ou notas")
         self._search.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._search.setMinimumWidth(280)
-        self._search.setFixedHeight(36)
+        self._search.setFixedHeight(40)
         self._search.textChanged.connect(self._on_search_text_changed)
         layout.addWidget(self._search, 1)
 
@@ -75,7 +75,7 @@ class HeaderBar(QWidget):
         self._project_filter.setAccessibleName("Filtro por projeto")
         self._project_filter.setMinimumWidth(140)
         self._project_filter.setMaximumWidth(200)
-        self._project_filter.setFixedHeight(36)
+        self._project_filter.setFixedHeight(40)
         self._project_filter.addItem(_ALL_PROJECTS_LABEL)
         self._project_filter.currentIndexChanged.connect(self._on_project_changed)
         layout.addWidget(self._project_filter)
@@ -87,7 +87,7 @@ class HeaderBar(QWidget):
         )
         self._btn_clear_done.setToolTip("Nenhuma task concluída visível")  # default: disabled
         self._btn_clear_done.setEnabled(False)  # disabled by default
-        self._btn_clear_done.setMinimumHeight(36)
+        self._btn_clear_done.setMinimumHeight(40)
         self._btn_clear_done.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_clear_done.clicked.connect(self.clear_completed_clicked.emit)
         layout.addWidget(self._btn_clear_done)
@@ -98,7 +98,7 @@ class HeaderBar(QWidget):
         self._btn_trash.setToolTip("Lixeira (tasks ocultas até 30 dias)")
         self._btn_trash.setIcon(svg_to_icon(TRASH_SVG, 20))
         self._btn_trash.setIconSize(QSize(20, 20))
-        self._btn_trash.setFixedSize(36, 36)
+        self._btn_trash.setFixedSize(40, 40)
         self._btn_trash.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_trash.clicked.connect(self.trash_clicked.emit)
         layout.addWidget(self._btn_trash)

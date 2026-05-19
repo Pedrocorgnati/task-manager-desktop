@@ -12,6 +12,7 @@ from task_manager_desktop.core.cleanup import (
 @pytest.fixture
 def db():
     conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
     conn.execute(
         """
         CREATE TABLE tasks (
@@ -19,7 +20,8 @@ def db():
             title TEXT,
             status TEXT,
             completed_at TEXT,
-            hidden_at TEXT
+            hidden_at TEXT,
+            deps TEXT
         )
         """
     )
@@ -54,7 +56,7 @@ class _FailConn:
 
 def test_soft_delete_after_3_days(db):
     db.execute(
-        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-4 days'), NULL)"
+        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-4 days'), NULL, NULL)"
     )
     db.commit()
     run_cleanup_on_boot(db)
@@ -64,7 +66,7 @@ def test_soft_delete_after_3_days(db):
 
 def test_hard_delete_after_30_days(db):
     db.execute(
-        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-31 days'), NULL)"
+        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-31 days'), NULL, NULL)"
     )
     db.commit()
     run_cleanup_on_boot(db)
@@ -73,7 +75,7 @@ def test_hard_delete_after_30_days(db):
 
 def test_recent_done_untouched(db):
     db.execute(
-        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-1 days'), NULL)"
+        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-1 days'), NULL, NULL)"
     )
     db.commit()
     run_cleanup_on_boot(db)
@@ -83,7 +85,7 @@ def test_recent_done_untouched(db):
 
 def test_idempotent(db):
     db.execute(
-        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-4 days'), NULL)"
+        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-4 days'), NULL, NULL)"
     )
     db.commit()
     run_cleanup_on_boot(db)
@@ -102,7 +104,7 @@ def test_operational_error_is_logged_and_reraised(capsys):
 
 def test_vacuum_only_when_rows_deleted(db):
     db.execute(
-        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-1 days'), NULL)"
+        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-1 days'), NULL, NULL)"
     )
     db.commit()
     spy = _TrackingConn(db)
@@ -113,7 +115,7 @@ def test_vacuum_only_when_rows_deleted(db):
 
 def test_vacuum_called_when_hard_delete_removes_rows(db):
     db.execute(
-        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-31 days'), NULL)"
+        "INSERT INTO tasks VALUES ('a','A','done', datetime('now','-31 days'), NULL, NULL)"
     )
     db.commit()
     spy = _TrackingConn(db)

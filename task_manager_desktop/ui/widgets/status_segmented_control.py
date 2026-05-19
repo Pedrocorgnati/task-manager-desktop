@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QPushButton, QWidget
 
 from task_manager_desktop.core.models import Status, Task
@@ -26,13 +26,19 @@ class StatusSegmentedControl(QWidget):
         super().__init__(parent)
         self._task = task
         self._all_tasks = all_tasks
+        self._surface = {
+            "chip_bg": "#27272A",
+            "chip_text": PALETTE["TEXT_PRIMARY"],
+            "title": PALETTE["TEXT_PRIMARY"],
+        }
+        self._state_name = "default"
         self._build_ui()
         self._apply_checked_style()
 
     def _build_ui(self) -> None:
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(3)
 
         self._btn_group = QButtonGroup(self)
         self._btn_group.setExclusive(True)
@@ -48,14 +54,14 @@ class StatusSegmentedControl(QWidget):
             btn.setProperty("class", "seg-status")
             btn.setProperty("value", label)
             btn.setCheckable(True)
-            btn.setFixedSize(28, 22)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setFixedSize(42 if status == Status.IN_PROGRESS else 34, 26)
             btn.setChecked(self._task.status == status)
             btn.setAccessibleName(_accessible_names[status])
             self._btn_group.addButton(btn)
             self._buttons[status] = btn
             layout.addWidget(btn)
 
-        # Atalhos publicos para tests e acesso externo
         self.btn_p = self._buttons[Status.PENDING]
         self.btn_ip = self._buttons[Status.IN_PROGRESS]
         self.btn_d = self._buttons[Status.DONE]
@@ -69,24 +75,48 @@ class StatusSegmentedControl(QWidget):
         self._apply_checked_style()
         self.status_changed.emit(new_status)
 
-    def _apply_checked_style(self) -> None:
-        ip_btn = self._buttons[Status.IN_PROGRESS]
-        has_open = (
-            count_open_deps(self._task.deps, self._all_tasks) > 0
-            if self._task.status == Status.IN_PROGRESS
-            else False
-        )
-        if ip_btn.isChecked():
-            if has_open:
-                ip_btn.setStyleSheet(
-                    f"QPushButton {{ background: {PALETTE['COLOR_WARNING']}; color: {PALETTE['BG_BASE']}; }}"
-                )
+    def apply_palette(self, state_name: str, surface: dict[str, str]) -> None:
+        self._state_name = state_name
+        self._surface = surface
+        self._apply_checked_style()
+
+    def _button_style(self, status: Status, checked: bool) -> str:
+        base_bg = self._surface.get("chip_bg", "rgba(24,24,27,0.45)")
+        base_text = self._surface.get("chip_text", "#F8FAFC")
+
+        if checked:
+            if status == Status.PENDING:
+                bg = "#18181B" if self._state_name == "waiting" else "#FBBF24"
+                fg = "#F8FAFC" if self._state_name == "waiting" else "#18181B"
+            elif status == Status.IN_PROGRESS:
+                has_open = count_open_deps(self._task.deps, self._all_tasks) > 0
+                bg = "#EAB308" if has_open else "#22C55E"
+                fg = "#18181B" if has_open else "#052E16"
             else:
-                ip_btn.setStyleSheet(
-                    f"QPushButton {{ background: {PALETTE['COLOR_SUCCESS']}; color: #064E3B; }}"
-                )
+                bg = "#E4E4E7"
+                fg = "#18181B"
+            border = bg
+            weight = 900
         else:
-            ip_btn.setStyleSheet("")
+            bg = base_bg
+            fg = base_text
+            border = "rgba(255,255,255,0.20)"
+            weight = 800
+
+        return (
+            "QPushButton {"
+            f"background: {bg}; color: {fg}; border: 1px solid {border};"
+            "border-radius: 8px; padding: 0;"
+            "font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+            f"font-size: 11px; font-weight: {weight};"
+            "}"
+            "QPushButton:hover { background: rgba(255,255,255,0.22); }"
+            "QPushButton:focus { border: 2px solid #FFFFFF; outline: none; }"
+        )
+
+    def _apply_checked_style(self) -> None:
+        for status, btn in self._buttons.items():
+            btn.setStyleSheet(self._button_style(status, btn.isChecked()))
 
     def setValue(self, status_value: str) -> None:
         """Revert segmented to a known status without emitting status_changed.

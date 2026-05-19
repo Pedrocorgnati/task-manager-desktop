@@ -3,11 +3,11 @@ from __future__ import annotations
 from task_manager_desktop.ui.theme import PALETTE as _P
 
 APP_ICON_SVG = (
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">'
-    f'<rect width="32" height="32" rx="6" fill="{_P["COLOR_PRIMARY"]}"/>'
-    f'<rect x="8" y="10" width="16" height="2" rx="1" fill="{_P["BG_BASE"]}"/>'
-    f'<rect x="8" y="15" width="12" height="2" rx="1" fill="{_P["BG_BASE"]}"/>'
-    f'<rect x="8" y="20" width="14" height="2" rx="1" fill="{_P["BG_BASE"]}"/>'
+    '<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64">'
+    '<rect width="64" height="64" rx="12" fill="#18181B"/>'
+    '<rect x="12" y="14" width="40" height="8" rx="2" fill="#16A34A"/>'
+    '<rect x="12" y="28" width="40" height="8" rx="2" fill="#EAB308"/>'
+    '<rect x="12" y="42" width="40" height="8" rx="2" fill="#3F3F46"/>'
     "</svg>"
 )
 

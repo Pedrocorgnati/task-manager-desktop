@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from datetime import datetime, timezone
+from pathlib import Path
 
 from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.core.models import (
@@ -30,9 +31,9 @@ def _row_to_task(row: sqlite3.Row) -> Task:
 
 
 class TaskRepository:
-    def __init__(self, conn: sqlite3.Connection, db_path: str = "") -> None:
+    def __init__(self, conn: sqlite3.Connection, db_path: Path | str = "") -> None:
         self._conn = conn
-        self.db_path = db_path
+        self.db_path: Path = Path(db_path) if db_path else Path()
 
     def create(self, task: Task) -> None:
         self._conn.execute(
@@ -108,8 +109,10 @@ class TaskRepository:
         return [_row_to_task(r) for r in rows]
 
     def list_trash(self) -> list[Task]:
+        # Sqlite3 nao suporta NULLS LAST nativo; usar IS NULL como primeiro criterio de ordem
         rows = self._conn.execute(
-            "SELECT * FROM tasks WHERE hidden_at IS NOT NULL ORDER BY hidden_at DESC"
+            "SELECT * FROM tasks WHERE hidden_at IS NOT NULL"
+            " ORDER BY completed_at IS NULL, completed_at DESC"
         ).fetchall()
         return [_row_to_task(r) for r in rows]
 
@@ -122,8 +125,29 @@ class TaskRepository:
         self._conn.execute("UPDATE tasks SET hidden_at = ? WHERE id = ?", (now, task_id))
         self._conn.commit()
 
+    def _filter_existing_deps(self, deps: list[str]) -> list[str]:
+        """Retorna apenas os dep IDs que ainda existem na tabela tasks."""
+        if not deps:
+            return []
+        placeholders = ",".join("?" * len(deps))
+        rows = self._conn.execute(
+            f"SELECT id FROM tasks WHERE id IN ({placeholders})", deps
+        ).fetchall()
+        existing = {r["id"] for r in rows}
+        return [d for d in deps if d in existing]
+
     def restore(self, task_id: str) -> None:
-        self._conn.execute("UPDATE tasks SET hidden_at = NULL WHERE id = ?", (task_id,))
+        row = self._conn.execute(
+            "SELECT deps FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        current_deps = []
+        if row:
+            current_deps = [d for d in (row["deps"] or "").split(",") if d]
+        clean_deps = self._filter_existing_deps(current_deps)
+        self._conn.execute(
+            "UPDATE tasks SET hidden_at = NULL, deps = ? WHERE id = ?",
+            (",".join(clean_deps), task_id),
+        )
         self._conn.commit()
 
     def list_projetos(self) -> list[str]:

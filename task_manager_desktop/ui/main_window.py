@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QByteArray, QSettings, Qt
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtGui import QAction, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 
 from task_manager_desktop.ui.empty_state import EmptyStateLabel
 from task_manager_desktop.ui.theme import (
-    SPLITTER_SIZES,
+    SPLITTER_RATIO,
     THEME_QSS_PATH,
     WINDOW_DEF_H,
     WINDOW_DEF_W,
@@ -49,6 +49,7 @@ class MainWindowShell(QMainWindow):
 
         self.setCentralWidget(self._splitter)
         self._restore_settings()
+        self._splitter.splitterMoved.connect(self._save_splitter_state)
 
         self._header_widget: QWidget | None = None
         self._current_task_id: str | None = None
@@ -120,6 +121,7 @@ class MainWindowShell(QMainWindow):
             self.restoreGeometry(geometry)
         else:
             self.resize(WINDOW_DEF_W, WINDOW_DEF_H)
+            self._center_on_primary_screen()
 
         if state and isinstance(state, (bytes, bytearray, QByteArray)):
             self.restoreState(state)
@@ -127,7 +129,20 @@ class MainWindowShell(QMainWindow):
         if splitter_state and isinstance(splitter_state, (bytes, bytearray, QByteArray)):
             self._splitter.restoreState(splitter_state)
         else:
-            self._splitter.setSizes(SPLITTER_SIZES)
+            total_w = self.width()
+            self._splitter.setSizes([int(total_w * SPLITTER_RATIO), int(total_w * (1 - SPLITTER_RATIO))])
+
+    def _save_splitter_state(self) -> None:
+        QSettings().setValue(_SETTINGS_SPLITTER, self._splitter.saveState())
+
+    def _center_on_primary_screen(self) -> None:
+        screen = QGuiApplication.primaryScreen()
+        if screen is None:
+            return
+        available = screen.availableGeometry()
+        frame = self.frameGeometry()
+        frame.moveCenter(available.center())
+        self.move(frame.topLeft())
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         settings = QSettings()

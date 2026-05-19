@@ -66,18 +66,17 @@ def pane(qtbot, repo) -> MarkdownPane:
 # ── Cenário 1: Save explícito persiste e volta ao viewer ─────────────────────
 
 
-def test_explicit_save_persists_and_returns_to_viewer(qtbot, pane, repo, sample_task):
-    """US-008 cenário 1: save explícito persiste e exibe viewer com conteúdo atualizado."""
+def test_explicit_save_persists_and_keeps_editor_open(qtbot, pane, repo, sample_task):
+    """US-008 cenário 1: save explícito persiste sem tirar o usuário do editor."""
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("# Atualizado")
 
     with qtbot.waitSignal(pane.notes_saved, timeout=1000) as blocker:
         pane.toolbar.save_requested.emit()
 
     assert blocker.args == [sample_task.id, "# Atualizado"]
-    assert pane.stack.currentIndex() == 0
+    assert pane.stack.currentIndex() == 1
     persisted = repo.get_by_id(sample_task.id)
     assert persisted is not None
     assert persisted.notes == "# Atualizado"
@@ -91,7 +90,6 @@ def test_empty_notes_accepted_on_save(qtbot, pane, repo, sample_task):
     """US-008 cenário 2: notas vazias são aceitas e viewer mostra empty state."""
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("")
 
     with qtbot.waitSignal(pane.notes_saved, timeout=1000):
@@ -100,7 +98,7 @@ def test_empty_notes_accepted_on_save(qtbot, pane, repo, sample_task):
     persisted = repo.get_by_id(sample_task.id)
     assert persisted is not None
     assert persisted.notes == ""
-    assert pane.stack.currentIndex() == 0
+    assert pane.stack.currentIndex() == 1
     pane.hide()
 
 
@@ -111,7 +109,6 @@ def test_implicit_save_on_task_switch(qtbot, pane, repo, sample_task, sample_tas
     """US-008 cenário 3: trocar de task com mudanças pendentes salva automaticamente."""
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("# Implicito")
 
     pane.set_task(sample_task_b)
@@ -119,7 +116,7 @@ def test_implicit_save_on_task_switch(qtbot, pane, repo, sample_task, sample_tas
     persisted = repo.get_by_id(sample_task.id)
     assert persisted is not None
     assert persisted.notes == "# Implicito"
-    assert pane.stack.currentIndex() == 0
+    assert pane.stack.currentIndex() == 1
     assert pane._current_task is not None
     assert pane._current_task.id == sample_task_b.id
     pane.hide()
@@ -132,7 +129,6 @@ def test_explicit_save_failure_keeps_editor_open(qtbot, pane, repo, sample_task,
     """US-008 cenário 4: falha de I/O no save explícito mantém editor aberto."""
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("# vai falhar")
 
     # Forçar erro no repositório
@@ -167,7 +163,6 @@ def test_implicit_save_failure_shows_toast_and_proceeds(
     """US-008 cenário 5: falha em save implícito mostra toast e carrega a nova task."""
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("# falha silenciosa")
 
     toast_messages: list[str] = []
@@ -192,7 +187,7 @@ def test_implicit_save_failure_shows_toast_and_proceeds(
     assert any("anterior" in m.lower() or "falha" in m.lower() for m in toast_messages)
     assert pane._current_task is not None
     assert pane._current_task.id == sample_task_b.id
-    assert pane.stack.currentIndex() == 0
+    assert pane.stack.currentIndex() == 1
     pane.hide()
 
 
@@ -203,7 +198,6 @@ def test_save_btn_restored_after_successful_save(qtbot, pane, repo, sample_task)
     """AC-006: botão Salvar deve estar habilitado e com texto original após save."""
     pane.show()
     pane.set_task(sample_task)
-    qtbot.mouseClick(pane.btn_edit, Qt.MouseButton.LeftButton)
     pane.editor.setPlainText("# OK")
 
     with qtbot.waitSignal(pane.notes_saved, timeout=1000):

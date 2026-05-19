@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QApplication,
@@ -12,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 
+# CL-085: reservado para erros criticos irrecuperaveis (banco corrompido, disco cheio no path do DB, permissao negada). Erros de save de notas e operacoes desfaziveis usam ToastWidget.
 class ErrorDialog(QDialog):
     def __init__(
         self,
@@ -72,15 +75,17 @@ class ErrorDialog(QDialog):
         cls,
         parent: QWidget | None,
         exception: BaseException,
-        db_path: str,
+        db_path: str | Path,
     ) -> int:
         dlg = cls(
             parent=parent,
             title="Erro de I/O",
             description=repr(exception),
-            path=db_path,
+            path=str(db_path),
             suggestion="Verifique espaço em disco e permissões de escrita.",
         )
+        if QApplication.platformName() == "offscreen":
+            QTimer.singleShot(0, dlg.accept)
         return dlg.exec()
 
 

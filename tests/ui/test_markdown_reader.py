@@ -32,21 +32,22 @@ def repo(in_memory_db):
     return TaskRepository(in_memory_db, db_path=":memory:")
 
 
-def test_show_task_sets_viewer_mode(qtbot):
+def test_show_task_sets_editor_mode(qtbot):
     reader = MarkdownReader(repo=None)
     qtbot.addWidget(reader)
     task = _make_task(notes="# hello\n\nworld")
     reader.show_task(task)
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
-    assert "hello" in reader._viewer.toPlainText()
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
+    assert "hello" in reader._editor.toPlainText()
 
 
-def test_show_task_empty_notes_shows_placeholder(qtbot):
+def test_show_task_empty_notes_opens_empty_editor(qtbot):
     reader = MarkdownReader(repo=None)
     qtbot.addWidget(reader)
     task = _make_task(notes="")
     reader.show_task(task)
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
+    assert reader._editor.toPlainText() == ""
 
 
 def test_clear_returns_to_placeholder(qtbot):
@@ -70,16 +71,15 @@ def test_edit_then_cancel_discards_changes(qtbot):
     assert "original" in reader._viewer.toPlainText()
 
 
-def test_save_persists_and_returns_to_viewer(qtbot, repo):
+def test_save_persists_and_keeps_editor_open(qtbot, repo):
     task = _make_task(id="t1", notes="old")
     repo.create(task)
     reader = MarkdownReader(repo)
     qtbot.addWidget(reader)
     reader.show_task(task)
-    reader._on_edit_clicked()
     reader._editor.setPlainText("new content")
     reader._on_save_clicked()
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
     assert repo.get_by_id("t1").notes == "new content"
 
 
@@ -91,12 +91,11 @@ def test_ctrl_s_saves(qtbot, repo):
     reader.show()
     qtbot.waitExposed(reader)
     reader.show_task(task)
-    reader._on_edit_clicked()
     reader._editor.setPlainText("via shortcut")
     reader._editor.setFocus()
     reader._save_shortcut.activated.emit()
     assert repo.get_by_id("t2").notes == "via shortcut"
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
     reader.hide()
 
 
@@ -106,7 +105,6 @@ def test_save_failure_keeps_editor_open(qtbot, repo, monkeypatch):
     reader = MarkdownReader(repo)
     qtbot.addWidget(reader)
     reader.show_task(task)
-    reader._on_edit_clicked()
     reader._editor.setPlainText("xx")
 
     def _boom(*_a, **_kw):
@@ -130,12 +128,11 @@ def test_show_task_during_edit_does_implicit_save(qtbot, repo):
     reader = MarkdownReader(repo)
     qtbot.addWidget(reader)
     reader.show_task(task_a)
-    reader._on_edit_clicked()
     reader._editor.setPlainText("a-editada")
     # Trocar para task_b deve salvar implicitamente task_a
     reader.show_task(task_b)
     assert reader.current_task_id() == "b"
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
     assert repo.get_by_id("a").notes == "a-editada"
 
 
@@ -152,8 +149,7 @@ def test_show_same_task_twice_is_idempotent(qtbot):
     qtbot.addWidget(reader)
     task = _make_task(id="abc", notes="content")
     reader.show_task(task)
-    reader._viewer.verticalScrollBar().setValue(0)
     reader.show_task(task)  # mesmo notes/id -> no re-render
-    # Idempotente: ainda no viewer com o mesmo task
+    # Idempotente: ainda no editor com o mesmo task
     assert reader.current_task_id() == "abc"
-    assert reader._stack.currentIndex() == MarkdownReader._IDX_VIEWER
+    assert reader._stack.currentIndex() == MarkdownReader._IDX_EDITOR
