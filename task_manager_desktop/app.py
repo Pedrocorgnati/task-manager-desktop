@@ -2,19 +2,17 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import QByteArray
+from PySide6.QtCore import QByteArray, Qt
 from PySide6.QtGui import QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import QApplication
 
 from .core.bootstrap import ensure_data_dir_and_db
+from .core.constants import PROPAGATION_THRESHOLD
 from .ui.dialogs import ErrorDialog
 from .ui.icons import APP_ICON_SVG
 from .ui.main_window import MainWindowShell
 from .ui.theme import THEME_QSS_PATH
-
-WINDOW_DEF_W = 1400
-WINDOW_DEF_H = 900
 
 
 def _build_app_icon() -> QIcon:
@@ -99,12 +97,10 @@ def main() -> None:
             from task_manager_desktop.ui.dialogs import ErrorDialog
             ErrorDialog.show_io_error(self._parent, Exception(message), db_path)
 
-    _PROP_THRESHOLD = 20
-
     def _refresh_card(task):
         all_tasks = {t.id: t for t in repo.list_active()}
         propagated = compute_sector_change_propagation(task.id, all_tasks)
-        if 1 + len(propagated) >= _PROP_THRESHOLD:
+        if 1 + len(propagated) >= PROPAGATION_THRESHOLD:
             task_list.refresh(list(all_tasks.values()))
             return
         changed = all_tasks.get(task.id)
@@ -145,11 +141,11 @@ def main() -> None:
         task_list.set_filters(query, header.current_project())
         _reconcile_reader_visibility()
 
-    def _on_project_filter_changed(_projeto: str) -> None:
+    def _on_project_filter_changed(_projeto: str | None) -> None:
         task_list.set_filters(header._search.text(), header.current_project())
         _reconcile_reader_visibility()
 
-    header.search_changed.connect(_on_search_changed)
+    header.search_text_changed.connect(_on_search_changed)
     header.project_filter_changed.connect(_on_project_filter_changed)
 
     def _on_clear_completed() -> None:
@@ -196,7 +192,15 @@ def main() -> None:
     def _on_task_selected_for_reader(task):
         reader.show_task(task)
 
+    def _on_enter_pressed_on_task(task):
+        reader.show_task(task)
+        try:
+            reader._viewer.setFocus(Qt.FocusReason.OtherFocusReason)
+        except Exception:  # noqa: BLE001
+            reader.setFocus(Qt.FocusReason.OtherFocusReason)
+
     task_list.task_selected.connect(_on_task_selected_for_reader)
+    task_list.enter_pressed_on_selection.connect(_on_enter_pressed_on_task)
 
     def _on_switch_blocked(msg: str) -> None:
         try:
@@ -209,7 +213,7 @@ def main() -> None:
     reader.switch_blocked.connect(_on_switch_blocked)
 
     from .core.models import Status
-    from .ui.shortcuts_controller import ShortcutsController
+    from .ui.shortcuts import ControllerBundle, register_all
 
     def _edit_selected() -> None:
         t = task_list.get_selected_task()
@@ -227,22 +231,33 @@ def main() -> None:
             delete_ctrl.handle(t)
 
     def _esc_handler() -> None:
-        focus = QApplication.focusWidget()
-        if focus is header._search:
-            window.setFocus()
+        # 1. Close topmost modal dialog
+        modal = QApplication.activeModalWidget()
+        if modal is not None:
+            modal.close()
+            return
+        # 2. Unfocus search field
+        if header.search_has_focus():
+            header.clear_search_focus()
+            return
+        # 3. Deselect task in list
+        if task_list.has_selection():
+            task_list.clear_selection()
+            return
+        # 4. No-op
 
-    shortcut_callbacks = {
-        "edit_selected": _edit_selected,
-        "mark_done_selected": _mark_done_selected,
-        "focus_search": header.focus_search,
-        "clear_search": header.clear_search,
-        "select_prev": task_list.select_prev,
-        "select_next": task_list.select_next,
-        "open_selected": task_list.open_selected,
-        "delete_selected": _delete_selected,
-        "esc_handler": _esc_handler,
-    }
-    ShortcutsController(window, shortcut_callbacks).install()
+    bundle = ControllerBundle(
+        edit_selected=_edit_selected,
+        mark_done_selected=_mark_done_selected,
+        focus_search=header.focus_search,
+        clear_search=header.clear_search,
+        select_prev=task_list.select_prev,
+        select_next=task_list.select_next,
+        open_selected=task_list.open_selected,
+        delete_selected=_delete_selected,
+        esc_handler=_esc_handler,
+    )
+    window._shortcuts = register_all(window, bundle)
 
     def _reconcile_reader_visibility() -> None:
         if reader.is_editing():

@@ -19,13 +19,13 @@ def test_layout_has_required_widgets(qtbot):
 def test_search_placeholder(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    assert bar._search.placeholderText() == "Buscar tasks..."
+    assert bar._search.placeholderText() == "Buscar por título ou notas... (Ctrl+F)"
 
 
 def test_search_debounce_emits_once(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    with qtbot.waitSignal(bar.search_changed, timeout=500) as blocker:
+    with qtbot.waitSignal(bar.search_text_changed, timeout=500) as blocker:
         bar._search.setText("ab")
         bar._search.setText("abc")
     assert blocker.args == ["abc"]
@@ -57,10 +57,10 @@ def test_set_projects_falls_back_to_todos_when_missing(qtbot):
     assert bar._project_filter.currentText() == "Todos"
 
 
-def test_current_project_maps_todos_to_sentinel(qtbot):
+def test_current_project_maps_todos_to_none(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    assert bar.current_project() == "__all__"
+    assert bar.current_project() is None
     bar.set_projects(["alpha"])
     bar._project_filter.setCurrentText("alpha")
     assert bar.current_project() == "alpha"
@@ -71,7 +71,7 @@ def test_clear_search_emits_empty(qtbot):
     qtbot.addWidget(bar)
     bar._search.setText("xx")
     qtbot.wait(200)
-    with qtbot.waitSignal(bar.search_changed, timeout=500) as blocker:
+    with qtbot.waitSignal(bar.search_text_changed, timeout=500) as blocker:
         bar.clear_search()
     assert blocker.args == [""]
 

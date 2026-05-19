@@ -48,13 +48,16 @@ clean:
 	@echo "✓ Cleaned"
 
 venv:
-	@python3 -m venv .venv && . .venv/bin/activate && pip install -r requirements.txt -r requirements-dev.txt
+	@python3 -m venv .venv && . .venv/bin/activate && pip install -e .[dev]
 
 install:
-	@pip install -r requirements.txt
+	@pip install -e .
 
 install-dev:
-	@pip install -r requirements-dev.txt
+	@pip install -e .[dev]
+
+audit:
+	@pip-audit || echo "pip-audit nao instalado: pip install pip-audit"
 
 help:
 	@echo "Task Manager Desktop — Available targets:"

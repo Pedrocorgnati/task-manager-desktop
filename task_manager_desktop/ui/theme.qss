@@ -178,6 +178,63 @@ QLabel[muted="true"] {
     color: #71717A;
 }
 
+/* Header search field */
+QLineEdit#headerSearch {
+    background-color: #18181B;
+    color: #FAFAFA;
+    border: 1px solid #3F3F46;
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-width: 280px;
+    min-height: 36px;
+    selection-background-color: #FBBF24;
+    selection-color: #18181B;
+}
+
+QLineEdit#headerSearch:focus {
+    border: 2px solid #FBBF24;
+    outline: none;
+}
+
+/* Header project filter combo */
+QComboBox#headerProjectFilter {
+    background-color: #27272A;
+    color: #FAFAFA;
+    border: 1px solid #3F3F46;
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-width: 140px;
+    max-width: 200px;
+    min-height: 36px;
+}
+
+QComboBox#headerProjectFilter:hover {
+    border-color: #71717A;
+}
+
+QComboBox#headerProjectFilter[active="true"] {
+    border: 1px solid #FBBF24;
+}
+
+QComboBox#headerProjectFilter::drop-down {
+    border: none;
+    width: 20px;
+}
+
+QComboBox#headerProjectFilter QAbstractItemView {
+    background-color: #27272A;
+    color: #FAFAFA;
+    border: 1px solid #3F3F46;
+    selection-background-color: #3F3F46;
+}
+
+/* Filter empty state label */
+QLabel#filterEmptyStateText {
+    color: #71717A;
+    font-family: "Ubuntu Sans", "Segoe UI", "Inter", system-ui, sans-serif;
+    font-size: 14px;
+}
+
 /* Empty state labels */
 QLabel#emptyStateText {
     color: #A1A1AA;

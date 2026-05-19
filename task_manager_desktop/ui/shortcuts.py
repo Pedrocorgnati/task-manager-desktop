@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -31,6 +32,19 @@ _SUPPRESS_IN_TEXT: frozenset[str] = frozenset(
 )
 
 
+@dataclass
+class ControllerBundle:
+    edit_selected: Callable[[], None] | None = field(default=None)
+    mark_done_selected: Callable[[], None] | None = field(default=None)
+    focus_search: Callable[[], None] | None = field(default=None)
+    clear_search: Callable[[], None] | None = field(default=None)
+    select_prev: Callable[[], None] | None = field(default=None)
+    select_next: Callable[[], None] | None = field(default=None)
+    open_selected: Callable[[], None] | None = field(default=None)
+    delete_selected: Callable[[], None] | None = field(default=None)
+    esc_handler: Callable[[], None] | None = field(default=None)
+
+
 class ShortcutsController:
     def __init__(self, window: QWidget, callbacks: dict[str, Callable[[], None]]) -> None:
         self._w = window
@@ -56,11 +70,35 @@ class ShortcutsController:
         return _fire
 
     def _focus_is_text_input(self) -> bool:
-        # window.focusWidget() works even when the window is not the OS active
-        # window (pytest-qt offscreen, popup overlays); QApplication.focusWidget()
-        # is the broader fallback for focus that escaped the controlled window.
         focus = self._w.focusWidget() or QApplication.focusWidget()
         return isinstance(focus, (QPlainTextEdit, QTextEdit, QLineEdit))
 
 
-__all__ = ["ShortcutsController"]
+def register_all(main_window: QWidget, bundle: ControllerBundle) -> list[QShortcut]:
+    callbacks = {
+        k: v
+        for k, v in {
+            "edit_selected": bundle.edit_selected,
+            "mark_done_selected": bundle.mark_done_selected,
+            "focus_search": bundle.focus_search,
+            "clear_search": bundle.clear_search,
+            "select_prev": bundle.select_prev,
+            "select_next": bundle.select_next,
+            "open_selected": bundle.open_selected,
+            "delete_selected": bundle.delete_selected,
+            "esc_handler": bundle.esc_handler,
+        }.items()
+        if v is not None
+    }
+    sc = ShortcutsController(main_window, callbacks)
+    sc.install()
+    return sc._shortcuts
+
+
+__all__ = [
+    "ShortcutsController",
+    "ControllerBundle",
+    "register_all",
+    "_SHORTCUT_MAP",
+    "_SUPPRESS_IN_TEXT",
+]

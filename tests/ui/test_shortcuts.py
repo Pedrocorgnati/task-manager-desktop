@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QLineEdit, QMainWindow, QPlainTextEdit
 from task_manager_desktop.core.db import run_migrations
 from task_manager_desktop.core.models import Status, Task, TaskType
 from task_manager_desktop.repositories.task_repository import TaskRepository
-from task_manager_desktop.ui.shortcuts_controller import (
+from task_manager_desktop.ui.shortcuts import (
     _SHORTCUT_MAP,
     _SUPPRESS_IN_TEXT,
     ShortcutsController,

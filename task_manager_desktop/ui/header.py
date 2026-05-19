@@ -19,14 +19,13 @@ from task_manager_desktop.ui.icons import (
 )
 
 _ALL_PROJECTS_LABEL = "Todos"
-_ALL_PROJECTS_VALUE = "__all__"
 _SEARCH_DEBOUNCE_MS = 150
 
 
 class HeaderBar(QWidget):
     new_task_requested = Signal()
-    search_changed = Signal(str)
-    project_filter_changed = Signal(str)
+    search_text_changed = Signal(str)
+    project_filter_changed = Signal(object)  # str | None; None = "Todos"
     clear_completed_clicked = Signal()
     trash_clicked = Signal()
 
@@ -63,19 +62,21 @@ class HeaderBar(QWidget):
 
         self._search = QLineEdit(self)
         self._search.setObjectName("headerSearch")
-        self._search.setPlaceholderText("Buscar tasks...")
+        self._search.setPlaceholderText("Buscar por título ou notas... (Ctrl+F)")
         self._search.setClearButtonEnabled(True)
-        self._search.setAccessibleName("Campo de busca de tasks")
+        self._search.setAccessibleName("Campo de busca por título ou notas")
         self._search.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._search.setMinimumHeight(32)
+        self._search.setMinimumWidth(280)
+        self._search.setFixedHeight(36)
         self._search.textChanged.connect(self._on_search_text_changed)
         layout.addWidget(self._search, 1)
 
         self._project_filter = QComboBox(self)
         self._project_filter.setObjectName("headerProjectFilter")
-        self._project_filter.setAccessibleName("Filtro de projeto")
-        self._project_filter.setFixedWidth(180)
-        self._project_filter.setMinimumHeight(32)
+        self._project_filter.setAccessibleName("Filtro por projeto")
+        self._project_filter.setMinimumWidth(140)
+        self._project_filter.setMaximumWidth(200)
+        self._project_filter.setFixedHeight(36)
         self._project_filter.addItem(_ALL_PROJECTS_LABEL)
         self._project_filter.currentIndexChanged.connect(self._on_project_changed)
         layout.addWidget(self._project_filter)
@@ -110,33 +111,60 @@ class HeaderBar(QWidget):
         shortcut.activated.connect(self.new_task_requested.emit)
 
     # ------------------------------------------------------------------
+    # Properties for external access
+    # ------------------------------------------------------------------
+    @property
+    def search_field(self) -> QLineEdit:
+        return self._search
+
+    @property
+    def combo(self) -> QComboBox:
+        return self._project_filter
+
+    # ------------------------------------------------------------------
     # Search
     # ------------------------------------------------------------------
     def _on_search_text_changed(self, _text: str) -> None:
         self._search_debounce.start()
 
     def _emit_search_changed(self) -> None:
-        self.search_changed.emit(self._search.text())
+        self.search_text_changed.emit(self._search.text())
 
     def clear_search(self) -> None:
         self._search.clear()
         self._search_debounce.stop()
-        self.search_changed.emit("")
+        self.search_text_changed.emit("")
 
     def focus_search(self) -> None:
         self._search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self._search.selectAll()
+
+    def search_has_focus(self) -> bool:
+        return self._search.hasFocus()
+
+    def clear_search_focus(self) -> None:
+        self._search.clearFocus()
 
     # ------------------------------------------------------------------
     # ProjectFilter
     # ------------------------------------------------------------------
     def _on_project_changed(self, _idx: int) -> None:
+        self._update_project_active_state()
         value = self.current_project()
         self.project_filter_changed.emit(value)
 
-    def current_project(self) -> str:
-        if self._project_filter.currentText() == _ALL_PROJECTS_LABEL:
-            return _ALL_PROJECTS_VALUE
-        return self._project_filter.currentText()
+    def _update_project_active_state(self) -> None:
+        active = self.current_project() is not None
+        self._project_filter.setProperty("active", "true" if active else "false")
+        self._project_filter.style().unpolish(self._project_filter)
+        self._project_filter.style().polish(self._project_filter)
+        self._project_filter.update()
+
+    def current_project(self) -> str | None:
+        text = self._project_filter.currentText()
+        if text == _ALL_PROJECTS_LABEL:
+            return None
+        return text
 
     def set_projects(self, projects: list[str]) -> None:
         previous = self._project_filter.currentText()
@@ -154,5 +182,11 @@ class HeaderBar(QWidget):
         self._project_filter.setCurrentIndex(max(0, target_idx))
         self._project_filter.blockSignals(False)
 
+        self._update_project_active_state()
+
         if previous != self._project_filter.currentText():
             self.project_filter_changed.emit(self.current_project())
+
+    # Alias for backward compat with caller code using Portuguese naming
+    def set_projetos(self, projects: list[str]) -> None:
+        self.set_projects(projects)

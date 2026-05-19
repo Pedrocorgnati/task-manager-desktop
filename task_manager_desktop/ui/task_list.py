@@ -56,6 +56,26 @@ class _InnerList(QListWidget):
         self.setSpacing(2)
 
     # ------------------------------------------------------------------
+    # Keyboard navigation — belt-and-suspenders (window shortcuts primary)
+    # ------------------------------------------------------------------
+
+    def keyPressEvent(self, event) -> None:  # type: ignore[override]
+        key = event.key()
+        if key == Qt.Key.Key_Up:
+            self._outer.select_prev()
+            event.accept()
+        elif key == Qt.Key.Key_Down:
+            self._outer.select_next()
+            event.accept()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            task = self._outer.get_selected_task()
+            if task is not None:
+                self._outer.enter_pressed_on_selection.emit(task)
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
@@ -158,11 +178,13 @@ class _InnerList(QListWidget):
 
 class TaskList(QWidget):
     task_selected = Signal(object)
+    enter_pressed_on_selection = Signal(object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._callbacks: dict[str, Any] = {}
         self._tasks: list[Task] = []
+        self._cards: list[Any] = []
         self._repo: TaskRepository | None = None
         self._main_window: QWidget | None = None
         self._query: str = ""
@@ -180,6 +202,15 @@ class TaskList(QWidget):
         self._empty_label.setWordWrap(True)
         self._empty_label.hide()
         layout.addWidget(self._empty_label)
+
+        self._empty_filter_label = QLabel(
+            "Nenhuma task corresponde a este filtro.", self
+        )
+        self._empty_filter_label.setObjectName("filterEmptyStateText")
+        self._empty_filter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty_filter_label.setWordWrap(True)
+        self._empty_filter_label.hide()
+        layout.addWidget(self._empty_filter_label)
 
         self._inner = _InnerList(self)
         layout.addWidget(self._inner)
@@ -217,6 +248,19 @@ class TaskList(QWidget):
         self._query = (query or "").strip()
         self._projeto = projeto or ALL_PROJECTS_SENTINEL
         self._rebuild(self._tasks)
+
+    def apply_filter(self, text: str | None, projeto: str | None) -> None:
+        self.set_filters(text, projeto)
+
+    def has_selection(self) -> bool:
+        return self.get_selected_task() is not None
+
+    def selected_task(self) -> Task | None:
+        return self.get_selected_task()
+
+    def clear_selection(self) -> None:
+        self._inner.clearSelection()
+        self._inner.setCurrentRow(-1)
 
     def visible_task_ids(self) -> list[str]:
         return [
@@ -289,6 +333,7 @@ class TaskList(QWidget):
 
     def _rebuild(self, tasks: list[Task]) -> None:
         self._inner.clear()
+        self._cards = []
         all_tasks: dict[str, Task] = {t.id: t for t in tasks}
 
         filter_active = is_active(self._query, self._projeto)
@@ -298,7 +343,15 @@ class TaskList(QWidget):
             else list(tasks)
         )
 
-        self._empty_label.setVisible(not tasks and not filter_active)
+        empty_no_tasks = not tasks and not filter_active
+        filter_no_match = filter_active and not visible_tasks
+
+        self._empty_label.setVisible(empty_no_tasks)
+        self._empty_filter_label.setVisible(filter_no_match)
+        self._inner.setVisible(not empty_no_tasks and not filter_no_match)
+
+        if filter_no_match:
+            return
 
         groups: dict[Sector, list[Task]] = {s: [] for s in _SECTOR_ORDER}
         for task in visible_tasks:
@@ -362,3 +415,4 @@ class TaskList(QWidget):
         card = TaskCard(task, self._callbacks, all_tasks_list, self._inner)
         card.selected.connect(self.task_selected.emit)
         self._inner.setItemWidget(item, card)
+        self._cards.append(card)

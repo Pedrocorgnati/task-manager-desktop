@@ -158,3 +158,47 @@ def test_visible_task_ids_helper(qtbot, repo):
 
     tl.set_filters(None, "alpha")
     assert tl.visible_task_ids() == ["t1"]
+
+
+def test_filter_persists_across_refresh(qtbot, repo):
+    _make_task(repo, tid="t1", title="login bug", projeto="alpha")
+    _make_task(repo, tid="t2", title="refactor header", projeto="alpha", order_index=2)
+    tl = TaskList()
+    qtbot.addWidget(tl)
+    tl.set_repo(repo)
+    tl.refresh(repo.list_active())
+
+    tl.set_filters("login", None)
+    assert _visible_task_ids(tl) == ["t1"]
+
+    # simulate CRUD refresh (no filter args)
+    tl.refresh(repo.list_active())
+    # filter must still be active
+    assert _visible_task_ids(tl) == ["t1"]
+
+
+def test_zero_matches_shows_empty_filter_label(qtbot, repo):
+    _make_task(repo, tid="t1", title="refactor ui", projeto="alpha")
+    tl = TaskList()
+    qtbot.addWidget(tl)
+    tl.set_repo(repo)
+    tl.refresh(repo.list_active())
+
+    tl.set_filters("zzznonexistent", None)
+
+    # isVisible requires parent hierarchy to be shown; use isHidden instead
+    assert not tl._empty_filter_label.isHidden()
+    assert tl._empty_label.isHidden()
+    assert _visible_task_ids(tl) == []
+
+
+def test_apply_filter_alias(qtbot, repo):
+    _make_task(repo, tid="t1", title="login bug", projeto="alpha")
+    _make_task(repo, tid="t2", title="refactor", projeto="beta", order_index=2)
+    tl = TaskList()
+    qtbot.addWidget(tl)
+    tl.set_repo(repo)
+    tl.refresh(repo.list_active())
+
+    tl.apply_filter("login", None)
+    assert _visible_task_ids(tl) == ["t1"]
