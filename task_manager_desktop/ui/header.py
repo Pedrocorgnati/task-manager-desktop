@@ -108,6 +108,24 @@ class HeaderBar(QWidget):
         self._btn_trash.clicked.connect(self.trash_clicked.emit)
         layout.addWidget(self._btn_trash)
 
+        # ─── DataTest Debug Button (Ctrl+Shift+D) ──────────────────
+        self._btn_datatest = QPushButton("DataTest")
+        self._btn_datatest.setFixedSize(68, 32)
+        self._btn_datatest.setCheckable(True)
+        self._btn_datatest.setToolTip("Exibir objectNames (Ctrl+Shift+D)")
+        self._btn_datatest.setProperty("testid", "header-datatest-button")
+        self._btn_datatest.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_datatest.setStyleSheet(
+            "QPushButton { background-color: transparent; color: #A1A1AA;"
+            "  border: 1px solid #52525B; border-radius: 6px;"
+            "  font-size: 11px; font-weight: 600; padding: 0 6px; }"
+            "QPushButton:hover { color: #FAFAFA; background-color: #3F3F46;"
+            "  border-color: #71717A; }"
+            "QPushButton:checked { background-color: #DC2626; color: #FAFAFA;"
+            "  border-color: #DC2626; font-weight: 700; }"
+        )
+        layout.addWidget(self._btn_datatest)
+
     # ------------------------------------------------------------------
     # External shortcut hook (Ctrl+N) — unchanged contract
     # ------------------------------------------------------------------

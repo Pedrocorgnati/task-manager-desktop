@@ -320,7 +320,18 @@ def main() -> None:
         datatest_shortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), window)
         datatest_shortcut.activated.connect(datatest_overlay.toggle)
 
-        print("[DataTest] Sistema de debug overlay ativado (Ctrl+Shift+D)")
+        # Conectar botão do header ao toggle
+        def _on_datatest_toggled(checked: bool) -> None:
+            if checked:
+                datatest_overlay.show_all()
+                header._btn_datatest.setChecked(True)
+            else:
+                datatest_overlay.hide_all()
+                header._btn_datatest.setChecked(False)
+
+        header._btn_datatest.clicked.connect(lambda: _on_datatest_toggled(header._btn_datatest.isChecked()))
+
+        print("[DataTest] Sistema de debug overlay ativado (Ctrl+Shift+D ou botão 'DataTest')")
     except Exception as exc:  # noqa: BLE001
         print(f"[DataTest] Falha não crítica ao inicializar: {exc}", file=sys.stderr)
 
