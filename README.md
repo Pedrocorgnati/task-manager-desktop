@@ -106,6 +106,33 @@ Migracao de dados externos (Todoist/Things/Notion): subtasks importadas viram ta
 
 ---
 
+## Undo e recuperação de tasks
+
+O app oferece dois mecanismos para desfazer exclusões:
+
+### Soft-delete (Lixeira)
+
+Ao clicar **"Limpar concluídas"** no header, todas as tasks com status `done` visíveis são **ocultas** (não deletadas) e movidas para a Lixeira. Essas tasks ficam retidas por **30 dias** antes da remoção definitiva:
+
+- **Visualizar:** Ícone "Lixeira" no header abre um dialog listando tasks ocultas nos últimos 30 dias
+- **Restaurar:** Clique em "Restaurar" para trazer a task de volta (mantém o status original `done`)
+- **Remoção automática:** Após 30 dias, a task é purgada automaticamente ao abrir o app
+
+### Hard-delete (permanente)
+
+Clique no **menu de três pontos** (⋮) em qualquer card de task → "Deletar" para remover permanentemente SEM passar pela Lixeira:
+
+- **Irreversível:** Hard-delete não pode ser desfeito via Lixeira
+- **Imediato:** Task desaparece do banco de dados no mesmo instante
+
+### Recomendação
+
+Para tarefas importantes, **use soft-delete** ("Limpar concluídas") e deixe na Lixeira até ter certeza de que não será necessário recuperá-las. Reserve hard-delete apenas para duplicatas óbvias ou erros de entrada.
+
+**Nota sobre backup:** A Lixeira é local no banco de dados. Se o arquivo `~/.local/share/task-manager-desktop/tasks.db` for perdido ou corrompido, nenhuma recovery será possível. Mantenha backups regulares para proteção máxima.
+
+---
+
 ## Migracao manual de tarefas anteriores
 
 Se voce vem de Todoist, Things, Notion ou outro gerenciador, **nao ha importador automatico no MVP**. A migracao eh manual e deliberada — abaixo, o fluxo recomendado.
