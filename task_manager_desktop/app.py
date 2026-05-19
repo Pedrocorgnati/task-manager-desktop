@@ -137,6 +137,18 @@ def main() -> None:
         except Exception:  # noqa: BLE001
             pass
 
+    def _update_clear_done_button_state() -> None:
+        """Update 'Limpar concluídas' button enabled state based on visible done tasks."""
+        try:
+            from task_manager_desktop.core.models import Status
+            all_tasks = repo.list_active()
+            has_visible_done = any(
+                task.status == Status.DONE for task in all_tasks
+            )
+            header.set_clear_done_enabled(has_visible_done)
+        except Exception:  # noqa: BLE001
+            pass
+
     def _on_search_changed(query: str) -> None:
         task_list.set_filters(query, header.current_project())
         _reconcile_reader_visibility()
@@ -176,6 +188,7 @@ def main() -> None:
     def _refresh_with_projects(tasks=None):
         _orig_refresh(tasks)
         _refresh_project_filter()
+        _update_clear_done_button_state()
 
     task_list.refresh = _refresh_with_projects  # type: ignore[method-assign]
 

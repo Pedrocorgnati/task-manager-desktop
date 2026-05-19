@@ -84,7 +84,8 @@ class HeaderBar(QWidget):
         self._btn_clear_done = QToolButton(self)
         self._btn_clear_done.setObjectName("headerClearDone")
         self._btn_clear_done.setAccessibleName("Ocultar concluídas")
-        self._btn_clear_done.setToolTip("Ocultar tasks concluídas")
+        self._btn_clear_done.setToolTip("Nenhuma task concluída visível")  # default: disabled
+        self._btn_clear_done.setEnabled(False)  # disabled by default
         self._btn_clear_done.setIcon(svg_to_icon(CLEAR_DONE_SVG, 20))
         self._btn_clear_done.setIconSize(QSize(20, 20))
         self._btn_clear_done.setFixedSize(32, 32)
@@ -120,6 +121,17 @@ class HeaderBar(QWidget):
     @property
     def combo(self) -> QComboBox:
         return self._project_filter
+
+    # ------------------------------------------------------------------
+    # Clear Done Button State Control
+    # ------------------------------------------------------------------
+    def set_clear_done_enabled(self, has_visible_done: bool) -> None:
+        """Enable/disable 'Limpar concluídas' button based on visible done tasks."""
+        self._btn_clear_done.setEnabled(has_visible_done)
+        if not has_visible_done:
+            self._btn_clear_done.setToolTip("Nenhuma task concluída visível")
+        else:
+            self._btn_clear_done.setToolTip("Ocultar tasks concluídas")
 
     # ------------------------------------------------------------------
     # Search

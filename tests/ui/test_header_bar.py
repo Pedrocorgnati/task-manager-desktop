@@ -87,6 +87,7 @@ def test_focus_search_does_not_clear_text(qtbot):
 def test_clear_done_button_emits(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
+    bar.set_clear_done_enabled(True)  # Enable button before clicking
     with qtbot.waitSignal(bar.clear_completed_clicked, timeout=200):
         bar._btn_clear_done.click()
 
@@ -109,3 +110,43 @@ def test_ctrl_n_shortcut_registered(qtbot):
     shortcuts = win.findChildren(QShortcut)
     sequences = {s.key().toString() for s in shortcuts}
     assert "Ctrl+N" in sequences
+
+
+def test_clear_done_button_disabled_by_default(qtbot):
+    """Button starts disabled."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    assert not bar._btn_clear_done.isEnabled()
+
+
+def test_clear_done_button_enabled_when_has_visible_done(qtbot):
+    """Button enabled after set_clear_done_enabled(True)."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    bar.set_clear_done_enabled(True)
+    assert bar._btn_clear_done.isEnabled()
+
+
+def test_clear_done_button_disabled_when_no_visible_done(qtbot):
+    """Button disabled after set_clear_done_enabled(False)."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    bar.set_clear_done_enabled(True)
+    bar.set_clear_done_enabled(False)
+    assert not bar._btn_clear_done.isEnabled()
+
+
+def test_clear_done_button_tooltip_when_disabled(qtbot):
+    """Tooltip shows when button disabled."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    bar.set_clear_done_enabled(False)
+    assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
+
+
+def test_clear_done_button_tooltip_when_enabled(qtbot):
+    """Tooltip changes when button enabled."""
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    bar.set_clear_done_enabled(True)
+    assert "Ocultar tasks concluídas" in bar._btn_clear_done.toolTip()
