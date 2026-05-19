@@ -7,6 +7,8 @@ from pathlib import Path
 
 _ICON_NAME = "task-manager-desktop"
 _DESKTOP_NAME = "task-manager-desktop"
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_VENV_PYTHON = _PROJECT_ROOT / ".venv" / "bin" / "python"
 
 ICON_PATH = Path.home() / ".local" / "share" / "icons" / f"{_ICON_NAME}.svg"
 DESKTOP_PATH = Path.home() / ".local" / "share" / "applications" / f"{_DESKTOP_NAME}.desktop"
@@ -16,7 +18,8 @@ def _resolve_exec_cmd() -> str:
     found = shutil.which("task-manager")
     if found:
         return found
-    return f"{sys.executable} -m task_manager_desktop"
+    python = _VENV_PYTHON if _VENV_PYTHON.exists() else Path(sys.executable)
+    return f"{python} -m task_manager_desktop"
 
 
 def install_icon(svg: str) -> bool:
@@ -33,13 +36,20 @@ def install_desktop_entry(exec_cmd: str) -> bool:
     """Grava .desktop em ~/.local/share/applications/. Idempotente — retorna True se escreveu."""
     content = (
         "[Desktop Entry]\n"
-        "Name=Task Manager Desktop\n"
-        f"Exec={exec_cmd}\n"
-        f"Icon={_ICON_NAME}\n"
+        "Version=1.0\n"
         "Type=Application\n"
-        "Categories=Utility;Office;\n"
-        "Terminal=false\n"
+        "Name=Task Manager Desktop\n"
+        "GenericName=Task Manager\n"
         "Comment=Gerenciador pessoal de tasks offline-first\n"
+        f"Exec={exec_cmd}\n"
+        f"Path={_PROJECT_ROOT}\n"
+        f"Icon={_ICON_NAME}\n"
+        "Terminal=false\n"
+        "Categories=Utility;Office;ProjectManagement;\n"
+        "Keywords=task;todo;manager;planner;productivity;\n"
+        "StartupNotify=true\n"
+        "X-GNOME-Autostart-enabled=false\n"
+        "DBusActivatable=false\n"
     )
     DESKTOP_PATH.parent.mkdir(parents=True, mode=0o755, exist_ok=True)
     if DESKTOP_PATH.exists() and DESKTOP_PATH.read_text(encoding="utf-8") == content:

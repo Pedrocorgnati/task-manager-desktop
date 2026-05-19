@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Task Manager Desktop
+GenericName=Task Manager
+Comment=Gerenciador pessoal de tasks offline-first
+Exec=python3 -m task_manager_desktop
+Icon=task-manager-desktop
+Terminal=false
+Categories=Utility;Office;ProjectManagement;
+Keywords=task;todo;manager;planner;productivity;
+StartupNotify=true
+X-GNOME-Autostart-enabled=false
+DBusActivatable=false

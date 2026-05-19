@@ -19,7 +19,7 @@ def _build_app_icon() -> QIcon:
     svg_bytes = QByteArray(APP_ICON_SVG.encode("utf-8"))
     renderer = QSvgRenderer(svg_bytes)
     pixmap = QPixmap(128, 128)
-    pixmap.fill()
+    pixmap.fill(Qt.GlobalColor.transparent)
     painter = QPainter(pixmap)
     renderer.render(painter)
     painter.end()
@@ -307,6 +307,22 @@ def main() -> None:
                 reader.clear()
             except Exception:  # noqa: BLE001
                 pass
+
+    # ── DataTest Debug Overlay ─────────────────────────────────────
+    try:
+        from PySide6.QtGui import QKeySequence, QShortcut
+        from .ui.debug_overlay import DataTestOverlay
+
+        # Instanciar DataTestOverlay
+        datatest_overlay = DataTestOverlay(window)
+
+        # Atalho de teclado: Ctrl+Shift+D para alternar overlays
+        datatest_shortcut = QShortcut(QKeySequence("Ctrl+Shift+D"), window)
+        datatest_shortcut.activated.connect(datatest_overlay.toggle)
+
+        print("[DataTest] Sistema de debug overlay ativado (Ctrl+Shift+D)")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[DataTest] Falha não crítica ao inicializar: {exc}", file=sys.stderr)
 
     window.show()
     sys.exit(app.exec())

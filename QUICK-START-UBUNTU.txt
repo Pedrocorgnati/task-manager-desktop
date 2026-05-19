@@ -1,0 +1,56 @@
+╔════════════════════════════════════════════════════════════════╗
+║  TASK MANAGER DESKTOP — INSTALAÇÃO RÁPIDA UBUNTU               ║
+╚════════════════════════════════════════════════════════════════╝
+
+📌 INSTALAÇÃO EM 1 COMANDO:
+
+  cd ai-forge/task-manager-desktop
+  ./install-desktop.sh
+
+  ✓ Pronto! O app aparecerá no menu de aplicativos
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 COMO USAR:
+
+  1. Abra o Menu de Aplicativos (tecla Super/Windows)
+  2. Digite "Task Manager"
+  3. Clique no ícone
+  4. PRONTO! ✓
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 FIXAR NA BARRA DE FAVORITOS:
+
+  1. Abra o aplicativo (conforme acima)
+  2. Clique com botão DIREITO na janela do app
+  3. Selecione "Adicionar aos Favoritos" ou "Pin to Taskbar"
+  4. Pronto! ✓
+
+  (Se não houver essa opção, arraste o ícone do Menu para a barra lateral)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 ARQUIVOS CRIADOS:
+
+  ~/.local/share/applications/task-manager-desktop.desktop
+  ~/.local/share/icons/task-manager-desktop.svg
+
+  (Você NÃO precisa mexer nesses arquivos)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 VIA TERMINAL:
+
+  python3 -m task_manager_desktop
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ ALGO NÃO FUNCIONOU?
+
+  Ver INSTALL-UBUNTU.md para solução de problemas completa
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ PRONTO! Aproveite seu Task Manager!
+

@@ -51,6 +51,7 @@ class HeaderBar(QWidget):
 
         self.btn_new = QPushButton("+", self)
         self.btn_new.setProperty("class", "primary")
+        self.btn_new.setProperty("testid", "header-new-task-button")
         self.btn_new.setFixedSize(40, 40)
         self.btn_new.setToolTip("Nova task (Ctrl+N)")
         self.btn_new.setAccessibleName("Criar nova task")
@@ -61,6 +62,7 @@ class HeaderBar(QWidget):
 
         self._search = QLineEdit(self)
         self._search.setObjectName("headerSearch")
+        self._search.setProperty("testid", "header-search-input")
         self._search.setPlaceholderText("Buscar por título ou notas... (Ctrl+F)")
         self._search.setClearButtonEnabled(True)
         self._search.setAccessibleName("Campo de busca por título ou notas")
@@ -72,6 +74,7 @@ class HeaderBar(QWidget):
 
         self._project_filter = QComboBox(self)
         self._project_filter.setObjectName("headerProjectFilter")
+        self._project_filter.setProperty("testid", "header-project-filter")
         self._project_filter.setAccessibleName("Filtro por projeto")
         self._project_filter.setMinimumWidth(140)
         self._project_filter.setMaximumWidth(200)
@@ -82,6 +85,7 @@ class HeaderBar(QWidget):
 
         self._btn_clear_done = QPushButton("Limpar concluídas", self)
         self._btn_clear_done.setProperty("class", "ghost-sm")
+        self._btn_clear_done.setProperty("testid", "header-clear-done-button")
         self._btn_clear_done.setAccessibleName(
             "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
         )
@@ -94,6 +98,7 @@ class HeaderBar(QWidget):
 
         self._btn_trash = QToolButton(self)
         self._btn_trash.setObjectName("headerTrash")
+        self._btn_trash.setProperty("testid", "header-trash-button")
         self._btn_trash.setAccessibleName("Abrir Lixeira de tasks")
         self._btn_trash.setToolTip("Lixeira (tasks ocultas até 30 dias)")
         self._btn_trash.setIcon(svg_to_icon(TRASH_SVG, 20))

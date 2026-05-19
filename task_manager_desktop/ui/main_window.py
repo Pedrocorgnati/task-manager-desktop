@@ -30,20 +30,26 @@ class MainWindowShell(QMainWindow):
         self.setWindowTitle("Task Manager Desktop")
         self.setMinimumSize(WINDOW_MIN_W, WINDOW_MIN_H)
         self.setAccessibleName("Task Manager Desktop")
+        self.setProperty("testid", "main-window")
 
         self._load_qss()
-        self._build_menu()
+        self._register_window_actions()
 
         self._splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self._splitter.setHandleWidth(4)
         self._splitter.setChildrenCollapsible(False)
+        self._splitter.setProperty("testid", "main-splitter")
 
         # Empty states iniciais — substituidos por feature modules via set_*_widget
         self._left_widget: QWidget = EmptyStateLabel(
             "Sem tasks. Clique em + para criar a primeira.",
             "Atalho: Ctrl+N",
         )
+        self._left_widget.setProperty("testid", "task-list-pane")
+
         self._right_widget: QWidget = EmptyStateLabel("Selecione uma task para ver as notas.")
+        self._right_widget.setProperty("testid", "task-reader-pane")
+
         self._splitter.addWidget(self._left_widget)
         self._splitter.addWidget(self._right_widget)
 
@@ -58,19 +64,11 @@ class MainWindowShell(QMainWindow):
         if THEME_QSS_PATH.exists():
             self.setStyleSheet(THEME_QSS_PATH.read_text(encoding="utf-8"))
 
-    def _build_menu(self) -> None:
-        menu_bar = self.menuBar()
-
-        arquivo = menu_bar.addMenu("Arquivo")
+    def _register_window_actions(self) -> None:
         sair = QAction("Sair", self)
         sair.setShortcut(QKeySequence("Ctrl+Q"))
         sair.triggered.connect(self.close)
-        arquivo.addAction(sair)
-
-        ajuda = menu_bar.addMenu("Ajuda")
-        sobre = QAction("Sobre", self)
-        sobre.triggered.connect(self._show_about)
-        ajuda.addAction(sobre)
+        self.addAction(sair)
 
     def _show_about(self) -> None:
         QMessageBox.about(self, "Sobre", "Task Manager Desktop v0.1")
