@@ -270,7 +270,7 @@ def main() -> None:
         delete_selected=_delete_selected,
         esc_handler=_esc_handler,
     )
-    window._shortcuts = register_all(window, bundle)
+    window._shortcuts = register_all(window, bundle)  # type: ignore[attr-defined]
 
     def _reconcile_reader_visibility() -> None:
         if reader.is_editing():
