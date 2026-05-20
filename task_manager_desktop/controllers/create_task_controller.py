@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import random
 import sqlite3
+import uuid
 from datetime import datetime, timezone
 
 from PySide6.QtCore import QObject, Qt
@@ -8,12 +10,15 @@ from PySide6.QtWidgets import QApplication
 
 from task_manager_desktop.core.cycles import resolve_cycles
 from task_manager_desktop.core.id_gen import generate_id
-from task_manager_desktop.core.models import Status, Task
+from task_manager_desktop.core.models import Status, Subtask, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.dialogs import ErrorDialog
 from task_manager_desktop.ui.dialogs.new_task_dialog import NewTaskDialog
 from task_manager_desktop.ui.task_list import TaskList
 from task_manager_desktop.ui.toast import ToastWidget
+
+# Paleta de cores das subtasks (mesma usada pelo SubtaskPane).
+_SUBTASK_COLORS = ["#F97316", "#FBBF24", "#22C55E", "#06B6D4", "#38BDF8", "#A78BFA", "#FB7185"]
 
 
 class CreateTaskController(QObject):
@@ -65,7 +70,6 @@ class CreateTaskController(QObject):
             title=data["title"],
             status=Status.PENDING,
             type=data["type"],
-            projeto=data["projeto"],
             deps=clean_deps,
             created_at=datetime.now(timezone.utc).isoformat(),
             order_index=max((t.order_index for t in all_tasks), default=0) + 1,
@@ -74,6 +78,15 @@ class CreateTaskController(QObject):
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self._repo.create(task)
+            for idx, text in enumerate(data.get("subtasks", []), start=1):
+                subtask = Subtask(
+                    id=f"st-{uuid.uuid4().hex[:10]}",
+                    task_id=task.id,
+                    text=text,
+                    color=random.choice(_SUBTASK_COLORS),
+                    order_index=idx,
+                )
+                self._repo.create_subtask(subtask)
         except sqlite3.Error as exc:
             ErrorDialog.show_io_error(parent_widget, exc, str(self._repo.db_path))
             return False

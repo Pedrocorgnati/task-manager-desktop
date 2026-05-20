@@ -20,21 +20,20 @@ _CBS = {
 
 
 def _task(**kw) -> Task:
-    defaults = dict(id="abc", title="Test", status=Status.PENDING, type=TaskType.ONLINE, projeto="forge", deps=[])
+    defaults = dict(id="abc", title="Test", status=Status.PENDING, type=TaskType.AGENT, deps=[])
     defaults.update(kw)
     return Task(**defaults)
 
 
 # TID-1-2-012 | covers: TASK-2/ST002 render
 def test_task_card_renders_three_rows_meta_title_status(qtbot):
-    """TaskCard renderiza 3 linhas: meta-row (id + #projeto + segmented + [...]), title-row, status-row (wifi + deps)."""
+    """TaskCard renderiza 3 linhas: meta-row (id + segmented + [...]), title-row, status-row (type icon + deps)."""
     task = _task()
     card = TaskCard(task, _CBS, [task])
     qtbot.addWidget(card)
 
     # meta-row elements
     assert card._id_label.text() == "abc"
-    assert "#forge" in card._project_tag.text()
     assert card._seg_ctrl is not None
     assert card._menu_btn is not None
 
@@ -42,7 +41,8 @@ def test_task_card_renders_three_rows_meta_title_status(qtbot):
     assert card._title_label.text() == "Test"
 
     # status-row
-    assert card._type_icon.toolTip() == "online"
+    assert card._type_icon is not None
+    assert card._type_icon.toolTip() == "agent"
     assert card._deps_label is not None
 
 
@@ -117,11 +117,10 @@ def test_card_applies_correct_border_color_per_sector(qtbot):
 
 
 # TID-1-2-016 | covers: TASK-2/ST002 anti-XSS
-def test_title_and_projeto_labels_use_plain_text_format(qtbot):
-    """QLabel de titulo e de #projeto chamam setTextFormat(Qt.PlainText) — anti-XSS Qt explicito."""
+def test_title_label_uses_plain_text_format(qtbot):
+    """QLabel de titulo chama setTextFormat(Qt.PlainText) — anti-XSS Qt explicito."""
     task = _task()
     card = TaskCard(task, _CBS, [task])
     qtbot.addWidget(card)
 
     assert card._title_label.textFormat() == Qt.TextFormat.PlainText
-    assert card._project_tag.textFormat() == Qt.TextFormat.PlainText

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QUrl, Signal
+from PySide6.QtGui import QColor, QPalette
 from PySide6.QtWidgets import (
     QSizePolicy,
     QTextBrowser,
@@ -27,11 +28,13 @@ class MarkdownViewer(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setProperty("testid", "markdown-viewer")
         self.setAccessibleName("Painel de notas da task")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
         self._browser = QTextBrowser(self)
         self._browser.setObjectName("markdownBrowser")
+        self._browser.setProperty("testid", "markdown-viewer-browser")
         self._browser.setAccessibleName("Conteúdo das notas em Markdown")
         self._browser.setOpenLinks(False)
         self._browser.anchorClicked.connect(self._on_anchor_clicked)
@@ -43,6 +46,7 @@ class MarkdownViewer(QWidget):
             pass
 
         self._empty = EmptyStateLabel("", parent=self)
+        self._empty.setProperty("testid", "markdown-viewer-empty-state")
         self._empty.setAccessibleName("Sem task selecionada")
 
         layout = QVBoxLayout(self)
@@ -52,6 +56,24 @@ class MarkdownViewer(QWidget):
         layout.addWidget(self._empty)
 
         self.set_task(None)
+
+    def set_reader_theme(self, light: bool) -> None:
+        bg = QColor("#FAFAF7" if light else "#0D0E12")
+        fg = QColor("#111116" if light else "#F8FAFC")
+        palette = self._browser.palette()
+        palette.setColor(QPalette.ColorRole.Base, bg)
+        palette.setColor(QPalette.ColorRole.Text, fg)
+        palette.setColor(QPalette.ColorRole.Window, bg)
+        palette.setColor(QPalette.ColorRole.WindowText, fg)
+        self._browser.setPalette(palette)
+        self._browser.viewport().setAutoFillBackground(True)
+        self._browser.viewport().setPalette(palette)
+        self._browser.document().setDefaultStyleSheet(
+            f"body {{ background: {bg.name()}; color: {fg.name()}; }}"
+            f"h1, h2, h3, h4, h5, h6 {{ color: {fg.name()}; font-weight: 900; }}"
+            f"a {{ color: #D97706; }}"
+            f"code, pre {{ background: {'#EFEDE5' if light else '#17181D'}; }}"
+        )
 
     def set_task(self, task: Task | None) -> None:
         if task is None:

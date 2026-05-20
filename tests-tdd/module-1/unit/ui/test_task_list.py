@@ -17,7 +17,7 @@ def test_refresh_clears_previous_cards_and_shows_empty_state_when_no_tasks(qtbot
     qtbot.addWidget(tl)
 
     # First populate with a task
-    task = Task(id="a", title="T1", type=TaskType.ONLINE, projeto="outros")
+    task = Task(id="a", title="T1", type=TaskType.AGENT)
     tl.refresh([task])
 
     # Now clear

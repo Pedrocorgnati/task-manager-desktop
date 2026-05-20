@@ -1,6 +1,6 @@
 # suite: acceptance | module: module-1-gestao-de-tasks | task: TASK-1
 # @tdd-locked: do not edit without /tdd:unlock
-# covers: US-001 (cenarios 1-8) — Criar task com titulo, tipo, projeto e dependencias
+# covers: US-001 (cenarios 1-6) — Criar task com titulo, tipo e dependencias
 # TIDs: TID-1-1-001, TID-1-1-002, TID-1-1-003, TID-1-1-004, TID-1-1-005,
 #        TID-1-1-006, TID-1-1-007, TID-1-1-008
 import sqlite3
@@ -31,12 +31,11 @@ def setup(qtbot, tmp_path):
     return ctrl, repo, conn, tl
 
 
-def _fake_dialog_data(title, tipo=TaskType.ONLINE, projeto="", deps=""):
-    from task_manager_desktop.core.models import normalize_projeto, parse_deps
+def _fake_dialog_data(title, tipo=TaskType.AGENT, deps=""):
+    from task_manager_desktop.core.models import parse_deps
     return {
         "title": title,
         "type": tipo,
-        "projeto": normalize_projeto(projeto),
         "deps": parse_deps(deps),
     }
 
@@ -59,7 +58,7 @@ def _make_fake_dialog_cls(data: dict):
 
 # TID-1-1-001 | covers: US-001#1 | bdd_type: SUCCESS
 def test_create_no_deps_defaults(setup, monkeypatch):
-    """Task criada sem deps (type=online default, projeto=outros default)."""
+    """Task criada sem deps (type=agent default)."""
     ctrl, repo, conn, tl = setup
 
     from task_manager_desktop.controllers import create_task_controller as mod
@@ -74,8 +73,7 @@ def test_create_no_deps_defaults(setup, monkeypatch):
     assert len(tasks) == 1
     t = tasks[0]
     assert t.title == "Tarefa sem deps"
-    assert t.type == TaskType.ONLINE
-    assert t.projeto == "outros"
+    assert t.type == TaskType.AGENT
     assert t.deps == []
 
 
@@ -168,55 +166,21 @@ def test_cycle_resolved_with_toast(setup, monkeypatch):
 
 
 # TID-1-1-006 | covers: US-001#6 | bdd_type: SUCCESS
-def test_create_with_offline_type(setup, monkeypatch):
-    """Task criada com radio type=offline persiste e card mostra wifi-off."""
+def test_create_with_human_type(setup, monkeypatch):
+    """Task criada com radio type=human persiste e card mostra human chip."""
     ctrl, repo, conn, tl = setup
 
     from task_manager_desktop.controllers import create_task_controller as mod
 
     monkeypatch.setattr(mod, "NewTaskDialog", _make_fake_dialog_cls(
-        _fake_dialog_data("Offline task", tipo=TaskType.OFFLINE)
+        _fake_dialog_data("Human task", tipo=TaskType.HUMAN)
     ))
     ctrl.handle()
 
     tasks = repo.list_active()
     assert len(tasks) == 1
-    assert tasks[0].type == TaskType.OFFLINE
-    row = conn.execute("SELECT type FROM tasks WHERE title='Offline task'").fetchone()
-    assert row["type"] == "offline"
+    assert tasks[0].type == TaskType.HUMAN
+    row = conn.execute("SELECT type FROM tasks WHERE title='Human task'").fetchone()
+    assert row["type"] == "human"
 
 
-# TID-1-1-007 | covers: US-001#7 | bdd_type: SUCCESS
-def test_create_with_explicit_projeto(setup, monkeypatch):
-    """Task criada com projeto explicito ('systemforge') persiste literal."""
-    ctrl, repo, conn, tl = setup
-
-    from task_manager_desktop.controllers import create_task_controller as mod
-
-    monkeypatch.setattr(mod, "NewTaskDialog", _make_fake_dialog_cls(
-        _fake_dialog_data("SF task", projeto="systemforge")
-    ))
-    ctrl.handle()
-
-    tasks = repo.list_active()
-    assert len(tasks) == 1
-    assert tasks[0].projeto == "systemforge"
-    row = conn.execute("SELECT projeto FROM tasks WHERE title='SF task'").fetchone()
-    assert row["projeto"] == "systemforge"
-
-
-# TID-1-1-008 | covers: US-001#8 | bdd_type: EDGE
-def test_empty_projeto_normalized_to_outros(setup, monkeypatch):
-    """Projeto vazio/whitespace normalizado para 'outros' via normalize_projeto."""
-    ctrl, repo, conn, tl = setup
-
-    from task_manager_desktop.controllers import create_task_controller as mod
-
-    monkeypatch.setattr(mod, "NewTaskDialog", _make_fake_dialog_cls(
-        _fake_dialog_data("Whitespace proj", projeto="   ")
-    ))
-    ctrl.handle()
-
-    tasks = repo.list_active()
-    assert len(tasks) == 1
-    assert tasks[0].projeto == "outros"

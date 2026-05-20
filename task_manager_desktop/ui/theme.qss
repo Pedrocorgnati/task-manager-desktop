@@ -210,52 +210,36 @@ QLabel[muted="true"] {
     color: #71717A;
 }
 
-QLineEdit#headerSearch {
-    background-color: #15161C;
-    color: #F8FAFC;
+QWidget#headerTypeFilter {
+    background-color: #151820;
     border: 1px solid #363942;
     border-radius: 12px;
-    padding: 7px 14px;
-    min-width: 280px;
-    min-height: 38px;
-    selection-background-color: #FBBF24;
-    selection-color: #111116;
 }
 
-QLineEdit#headerSearch:focus {
-    border: 2px solid #FBBF24;
+QLabel#headerTypeFilterLabel {
+    color: #A1A1AA;
+    font-size: 11px;
+    font-weight: 700;
 }
 
-QComboBox#headerProjectFilter {
-    background-color: #1C1E25;
+QWidget#headerTypeFilter QCheckBox {
     color: #F8FAFC;
-    border: 1px solid #363942;
-    border-radius: 12px;
-    padding: 7px 12px;
-    min-width: 140px;
-    max-width: 220px;
-    min-height: 38px;
+    font-size: 12px;
+    font-weight: 700;
+    spacing: 4px;
 }
 
-QComboBox#headerProjectFilter:hover {
-    border-color: #686C78;
+QWidget#headerTypeFilter QCheckBox::indicator {
+    width: 13px;
+    height: 13px;
+    border-radius: 4px;
+    border: 1px solid #71717A;
+    background-color: #0F1117;
 }
 
-QComboBox#headerProjectFilter[active="true"] {
-    border: 1px solid #FBBF24;
-    background-color: #2A2110;
-}
-
-QComboBox#headerProjectFilter::drop-down {
-    border: none;
-    width: 22px;
-}
-
-QComboBox#headerProjectFilter QAbstractItemView {
-    background-color: #202126;
-    color: #F8FAFC;
-    border: 1px solid #3F3F46;
-    selection-background-color: #3B3D46;
+QWidget#headerTypeFilter QCheckBox::indicator:checked {
+    background-color: #FBBF24;
+    border-color: #FBBF24;
 }
 
 QLabel#filterEmptyStateText,
@@ -346,7 +330,7 @@ QLabel#markdownModePill {
     background: rgba(251, 191, 36, 0.11);
     border: 1px solid rgba(251, 191, 36, 0.34);
     border-radius: 9px;
-    padding: 4px 9px;
+    padding: 0 9px;
     font-family: "JetBrains Mono", "Ubuntu Mono", monospace;
     font-size: 10px;
     font-weight: 900;
@@ -358,6 +342,19 @@ QLabel#editorShortcutHint {
     font-family: "JetBrains Mono", "Ubuntu Mono", monospace;
     font-size: 11px;
     background: transparent;
+}
+
+QPushButton#markdownThemeToggle {
+    background: #17181D;
+    color: #F8FAFC;
+    border: 1px solid #363942;
+    border-radius: 10px;
+    padding: 0;
+}
+
+QPushButton#markdownThemeToggle:hover {
+    background: #24262D;
+    border-color: #FBBF24;
 }
 
 QPlainTextEdit[class="md-editor"] {
@@ -398,10 +395,11 @@ QPushButton[class="restore-btn"] {
     color: #052E16;
     border: none;
     border-radius: 9px;
-    padding: 6px 16px;
+    padding: 0 16px;
     font-size: 13px;
     font-weight: 800;
     min-height: 34px;
+    max-height: 34px;
 }
 
 QPushButton[class="success"]:hover,
@@ -415,10 +413,11 @@ QPushButton[class="ghost-sm"] {
     color: #D4D4D8;
     border: 1px solid #363942;
     border-radius: 10px;
-    padding: 7px 13px;
+    padding: 0 13px;
     font-size: 13px;
     font-weight: 700;
-    min-height: 36px;
+    min-height: 34px;
+    max-height: 34px;
 }
 
 QPushButton[class="ghost"]:hover,
@@ -514,4 +513,189 @@ QStackedWidget {
 QWidget#markdownPane {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #101116, stop:1 #0D0E12);
     border-left: 1px solid #272A33;
+}
+
+QWidget#middleColumnPane {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #111217, stop:0.65 #15130B, stop:1 #0D0E12);
+    border-left: 1px solid #272A33;
+    border-right: 1px solid #272A33;
+}
+
+QWidget#subtaskPane {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #111217, stop:0.65 #15130B, stop:1 #0D0E12);
+    border-left: 1px solid #272A33;
+    border-right: 1px solid #272A33;
+}
+
+QPushButton#middleColumnToggle {
+    background: #1C1E25;
+    color: #FBBF24;
+    border: 1px solid #3F3F46;
+    border-radius: 10px;
+    font-family: "JetBrains Mono", "Ubuntu Mono", monospace;
+    font-size: 13px;
+    font-weight: 900;
+    padding: 0 10px;
+}
+
+QPushButton#middleColumnToggle:hover {
+    background: #2A2110;
+    border-color: #FBBF24;
+}
+
+QLabel#middleColumnTitle {
+    color: #F8FAFC;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+QLabel#middleColumnHint {
+    color: #71717A;
+    font-size: 12px;
+}
+
+QLabel#subtaskPaneTitle {
+    color: #F8FAFC;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+}
+
+QLabel#subtaskPaneBodyTitle {
+    color: #F8FAFC;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+}
+
+QPushButton#subtaskAddButton {
+    background: #FBBF24;
+    color: #111116;
+    border: 1px solid #FBBF24;
+    border-radius: 9px;
+    font-size: 18px;
+    font-weight: 900;
+    padding: 0;
+}
+
+QPushButton#subtaskAddButton:hover {
+    background: #FDE68A;
+    border-color: #FDE68A;
+}
+
+QPushButton#subtaskAddButton:disabled {
+    background: #24262D;
+    color: #555864;
+    border-color: #363942;
+}
+
+QToolButton#headerClearDone,
+QToolButton#headerTerminalLayout,
+QToolButton#headerTerminalCollapse,
+QToolButton#headerTrash,
+QToolButton#subtaskClearDoneButton {
+    background: #1C1E25;
+    border: 1px solid #363942;
+    border-radius: 10px;
+    padding: 0;
+}
+
+QToolButton#headerClearDone:hover,
+QToolButton#headerTerminalLayout:hover,
+QToolButton#headerTerminalCollapse:hover,
+QToolButton#headerTrash:hover,
+QToolButton#subtaskClearDoneButton:hover {
+    background: #2A2110;
+    border-color: #FBBF24;
+}
+
+QToolButton#headerClearDone:disabled,
+QToolButton#subtaskClearDoneButton:disabled {
+    background: #17181E;
+    border-color: #272A33;
+    opacity: 0.45;
+}
+
+QListWidget#subtaskList {
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 0;
+}
+
+QListWidget#subtaskList::item {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+QWidget#subtaskRow {
+    background: transparent;
+    border: none;
+}
+
+QWidget#subtaskRow[state="2"] {
+    background: transparent;
+    border: none;
+}
+
+QWidget#subtaskRow[state="1"] {
+    background: transparent;
+    border: none;
+}
+
+QWidget#subtaskRow[state="0"] {
+    border: none;
+}
+
+QWidget#subtaskCard {
+    background: rgba(255,255,255,0.10);
+    border: none;
+    border-radius: 8px;
+}
+
+QLabel#subtaskText {
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+QPlainTextEdit#subtaskNotesEditor {
+    background: rgba(5, 6, 8, 0.62);
+    color: #E4E4E7;
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 8px;
+    padding: 7px 8px;
+    font-size: 11px;
+    selection-background-color: #FBBF24;
+    selection-color: #111116;
+}
+
+QCheckBox#subtaskCheckbox::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid #71717A;
+    background: #111116;
+}
+
+QCheckBox#subtaskCheckbox::indicator:checked {
+    background: #111116;
+    border-color: #3F3F46;
+}
+
+QCheckBox#subtaskCheckbox::indicator:indeterminate {
+    background: #22C55E;
+    border-color: #86EFAC;
+}
+
+QLabel#subtaskEmpty {
+    color: #71717A;
+    font-size: 12px;
 }

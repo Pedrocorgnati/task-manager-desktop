@@ -56,8 +56,7 @@ def _task(tid: str, status: Status = Status.PENDING, hidden_at: str | None = Non
         id=tid,
         title=f"Task {tid}",
         status=status,
-        type=TaskType.ONLINE,
-        projeto="outros",
+        type=TaskType.AGENT,
         deps=[],
     )
     return t
@@ -277,7 +276,7 @@ def test_ac_t009_in_progress_tasks_not_hidden(repo):
     """AC-T-009: Tasks in_progress NÃO são afetadas por hide_all_done."""
     t = Task(
         id="ip1", title="In Progress", status=Status.IN_PROGRESS,
-        type=TaskType.ONLINE, projeto="outros", deps=[],
+        type=TaskType.AGENT, deps=[],
     )
     repo.create(t)
     _create_done(repo, "d1")

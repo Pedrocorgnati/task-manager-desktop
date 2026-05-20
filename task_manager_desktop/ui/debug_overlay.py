@@ -1,149 +1,206 @@
-"""Debug overlay para exibir testid (objectName) de widgets em modo desenvolvimento.
+"""DataTest overlay para exibir testids visualmente em runtime.
 
-Implementação baseada no sistema DataTest do workflow-app (PySide6/Qt6).
-Exibe labels flutuantes vermelhos com o testid de cada widget, permitindo
-copiar para clipboard ao clicar.
+Implementacao identica ao workflow-app:
+- 4 modos: off, all, body (tudo exceto QAbstractButton), buttons (so QAbstractButton)
+- Overlays parented ao centralWidget, posicionados com mapTo(central, ...)
+- Click no overlay copia `data-testid="..."` para clipboard
+- Feedback visual: vermelho normal -> verde 600ms apos copiar
 """
 
-from typing import Optional
-from PySide6.QtCore import Qt, QPoint, QTimer
+from __future__ import annotations
+
+from collections.abc import Callable
+import re
+
+from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtWidgets import (
+    QAbstractButton,
     QApplication,
     QLabel,
-    QWidget,
-    QAbstractButton,
     QMainWindow,
+    QToolBar,
+    QWidget,
 )
 
 
-class DataTestOverlay:
-    """Gerenciador de overlays de testid para debug visual de widgets."""
+_VALID_MODES = ("off", "all", "body", "buttons")
+# status-btn-{label}-{id} e status-control-{id}: todo o sufixo apos o prefixo
+# e dinamico por instancia, entao colapsa o conjunto inteiro para {ID}.
+_STATUS_ID_TOKEN = re.compile(r"(status-(?:btn|control)-)[a-z0-9-]+")
+# task-card-{id}: mascara apenas o segmento de id (3 chars), preservando
+# sufixos estaveis como -type, -title, -actions.
+_TASK_ID_TOKEN = re.compile(r"(?<=task-card-)[a-z0-9]{3}(?=-|$)")
+# subtask ids tem o formato 'st-' + 10 chars hex (ver SubtaskPane._add_subtask).
+_SUBTASK_ID_TOKEN = re.compile(r"\bst-[0-9a-f]{10}\b")
 
-    # Estilos dos overlays
-    _STYLE_NORMAL = (
+
+def _mask_dynamic_testid(raw: str) -> str:
+    """Mascara tokens dinamicos de id como '{ID}' para exibicao estavel.
+
+    Exemplos:
+        'status-btn-ip-cew'         -> 'status-btn-{ID}'
+        'status-control-vc9'        -> 'status-control-{ID}'
+        'task-card-cew-type'        -> 'task-card-{ID}-type'
+        'subtask-row-st-ab12cd34ef' -> 'subtask-row-{ID}'
+    """
+    raw = _STATUS_ID_TOKEN.sub(r"\1{ID}", raw)
+    raw = _TASK_ID_TOKEN.sub("{ID}", raw)
+    return _SUBTASK_ID_TOKEN.sub("{ID}", raw)
+
+
+class DataTestOverlay:
+    """Gerencia overlays vermelhos sobre widgets com property('testid')."""
+
+    _STYLE_NORMAL_BODY = (
         "background-color: rgba(220, 38, 38, 0.9); color: white;"
-        " font-size: 10px; font-weight: 700; padding: 2px 5px;"
+        " font-size: 11px; font-weight: 700; padding: 3px 6px;"
+        " border-radius: 3px; border: none;"
+    )
+    _STYLE_NORMAL_BUTTON = (
+        "background-color: rgba(37, 99, 235, 0.9); color: white;"
+        " font-size: 11px; font-weight: 700; padding: 3px 6px;"
         " border-radius: 3px; border: none;"
     )
     _STYLE_COPIED = (
         "background-color: rgba(34, 197, 94, 0.9); color: white;"
-        " font-size: 10px; font-weight: 700; padding: 2px 5px;"
+        " font-size: 11px; font-weight: 700; padding: 3px 6px;"
         " border-radius: 3px; border: none;"
     )
 
-    def __init__(self, main_window: QMainWindow):
-        """Inicializa o gerenciador de overlays.
+    def __init__(self, main_window: QMainWindow) -> None:
+        self._main_window = main_window
+        self._overlays: list[QLabel] = []
+        self._mode: str = "off"
+        self._terminal_write_enabled = False
+        self._terminal_writer: Callable[[str], None] | None = None
 
-        Args:
-            main_window: Janela principal (QMainWindow) onde os overlays serão ancorados.
-        """
-        self.main_window = main_window
-        self._testid_overlays: list[QLabel] = []
-        self._overlay_mode = "off"  # "off", "all", "body", "buttons"
+    @property
+    def mode(self) -> str:
+        return self._mode
+
+    @property
+    def is_active(self) -> bool:
+        return self._mode != "off"
 
     def set_mode(self, mode: str) -> None:
-        """Define o modo de exibição dos overlays.
+        """Define o modo. Modos validos: off, all, body, buttons.
 
-        Args:
-            mode: "off" (desligado), "all" (todos), "body" (exceto botões), "buttons" (apenas botões).
+        - off: esconde todos os overlays
+        - all: mostra para todo widget com testid
+        - body: mostra para todos EXCETO QAbstractButton
+        - buttons: mostra APENAS QAbstractButton
         """
-        self._overlay_mode = mode
+        if mode not in _VALID_MODES:
+            mode = "off"
+        self._mode = mode
         if mode == "off":
-            self.hide_all()
+            self._hide_all()
         else:
-            self.show_all()
+            self._show_for_mode(mode)
 
-    def show_all(self) -> None:
-        """Exibe overlays para todos os widgets com testid."""
-        self.hide_all()
-        central = self.main_window.centralWidget()
-        if not central:
+    def toggle(self) -> None:
+        """Alterna entre 'off' e 'all'."""
+        self.set_mode("off" if self._mode != "off" else "all")
+
+    def set_terminal_write_enabled(self, enabled: bool) -> None:
+        self._terminal_write_enabled = bool(enabled)
+
+    def set_terminal_writer(self, writer: Callable[[str], None] | None) -> None:
+        self._terminal_writer = writer
+
+    def refresh(self) -> None:
+        """Re-renderiza overlays no modo atual (util apos resize/scroll)."""
+        if self._mode != "off":
+            self._show_for_mode(self._mode)
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _show_for_mode(self, mode: str) -> None:
+        self._hide_all()
+
+        central = self._main_window.centralWidget()
+        if central is None:
             return
 
-        used_positions: list[tuple[int, int, int, int]] = []  # x, y, w, h
+        # Parent overlays to the QMainWindow itself, NOT to centralWidget.
+        # centralWidget here is a QSplitter, which auto-arranges any QWidget
+        # child into a resizable pane — that would stretch every overlay to
+        # full height. QMainWindow does not absorb plain QLabel children
+        # into its dock/central layout, so they stay free-floating.
+        overlay_parent: QWidget = self._main_window  # type: ignore[assignment]
 
-        # Coletar todos os widgets
+        # Scan centralWidget + all QToolBars (header lives in a QToolBar via
+        # addToolBar, so it is NOT a descendant of centralWidget).
         scan_widgets: list[QWidget] = [central]
         scan_widgets.extend(central.findChildren(QWidget))
+        for toolbar in self._main_window.findChildren(QToolBar):
+            scan_widgets.append(toolbar)
+            scan_widgets.extend(toolbar.findChildren(QWidget))
+
+        used_positions: list[tuple[int, int, int, int]] = []
 
         for widget in scan_widgets:
             testid = widget.property("testid")
-            if not testid or widget.property("_is_testid_overlay"):
+            if not testid:
+                continue
+            if widget.property("_is_testid_overlay"):
                 continue
 
-            testid_str = str(testid)
-
-            # Filtrar por modo
             is_button = isinstance(widget, QAbstractButton)
-            if self._overlay_mode == "body" and is_button:
+            if mode == "body" and is_button:
                 continue
-            if self._overlay_mode == "buttons" and not is_button:
-                continue
-
-            # Pular widgets não visíveis
-            if not widget.isVisible() or not widget.isVisibleTo(central):
+            if mode == "buttons" and not is_button:
                 continue
 
-            # Mapear posição do widget para as coordenadas da janela central
+            if not widget.isVisible() or not widget.isVisibleTo(overlay_parent):
+                continue
+
             try:
-                pos = widget.mapTo(central, QPoint(0, 0))
+                pos = widget.mapTo(overlay_parent, QPoint(0, 0))
             except RuntimeError:
                 continue
 
-            x, y = pos.x(), pos.y() - 14
-
-            # Ajustar posição se houver sobreposição com overlay anterior
-            for ux, uy, uw, uh in used_positions:
-                if abs(x - ux) < max(uw, 30) and abs(y - uy) < max(uh, 18):
-                    y = uy + uh + 2
-
-            # Criar overlay label
-            overlay = QLabel(testid_str, central)
-            overlay.setStyleSheet(self._STYLE_NORMAL)
+            testid_str = str(testid)
+            display_testid = _mask_dynamic_testid(testid_str)
+            overlay = QLabel(display_testid, overlay_parent)
+            normal_style = self._STYLE_NORMAL_BUTTON if is_button else self._STYLE_NORMAL_BODY
+            overlay.setStyleSheet(normal_style)
             overlay.setProperty("_is_testid_overlay", True)
             overlay.setCursor(Qt.CursorShape.PointingHandCursor)
-            overlay.setToolTip(f"Clique para copiar: {testid_str}")
-
-            # Conectar clique para copiar para clipboard
-            self._setup_overlay_click(overlay, testid_str)
+            overlay.setToolTip(f"Clique para copiar: {display_testid}")
+            overlay.setWordWrap(False)
+            overlay.mousePressEvent = self._make_click_handler(overlay, display_testid, normal_style)
 
             overlay.adjustSize()
+            # Padroniza: ancora no canto inferior esquerdo do widget alvo.
+            x = pos.x() + 2
+            y = pos.y() + max(0, widget.height() - overlay.height() - 2)
+
+            for ux, uy, uw, uh in used_positions:
+                if abs(x - ux) < max(uw, 30) and abs(y - uy) < max(uh, 18):
+                    y = max(0, uy - overlay.height() - 2)
+
             overlay.move(x, y)
             overlay.show()
             overlay.raise_()
+
             used_positions.append((x, y, overlay.width(), overlay.height()))
-            self._testid_overlays.append(overlay)
+            self._overlays.append(overlay)
 
-    def _setup_overlay_click(self, overlay: QLabel, testid_str: str) -> None:
-        """Configura o evento de clique do overlay para copiar testid.
-
-        Args:
-            overlay: Label do overlay.
-            testid_str: Texto do testid a copiar.
-        """
-
-        def handler(event):
-            # Copiar para clipboard
-            QApplication.clipboard().setText(f'objectName="{testid_str}"')
-
-            # Feedback visual: mudar cor para verde por 600ms
+    def _make_click_handler(self, overlay: QLabel, testid_str: str, normal_style: str):
+        def handler(_event):
+            selector = f'data-testid="{testid_str}"'
+            QApplication.clipboard().setText(selector)
+            if self._terminal_write_enabled and self._terminal_writer is not None:
+                self._terminal_writer(selector + " ")
             overlay.setStyleSheet(self._STYLE_COPIED)
-            QTimer.singleShot(
-                600, lambda: overlay.setStyleSheet(self._STYLE_NORMAL)
-            )
+            QTimer.singleShot(600, lambda: overlay.setStyleSheet(normal_style))
+        return handler
 
-        overlay.mousePressEvent = handler
-
-    def hide_all(self) -> None:
-        """Remove todos os overlays."""
-        for overlay in self._testid_overlays:
+    def _hide_all(self) -> None:
+        for overlay in self._overlays:
             overlay.hide()
             overlay.deleteLater()
-        self._testid_overlays.clear()
-
-    def toggle(self) -> None:
-        """Alterna entre modo "off" e "all"."""
-        if self._overlay_mode == "off":
-            self.set_mode("all")
-        else:
-            self.set_mode("off")
+        self._overlays.clear()

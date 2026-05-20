@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence, QShortcut
-from PySide6.QtWidgets import QLineEdit, QMainWindow, QPlainTextEdit
+from PySide6.QtWidgets import QLineEdit, QMainWindow, QPlainTextEdit, QWidget
 
 from task_manager_desktop.core.db import run_migrations
 from task_manager_desktop.core.models import Status, Task, TaskType
@@ -14,6 +14,7 @@ from task_manager_desktop.ui.shortcuts import (
     ShortcutsController,
 )
 from task_manager_desktop.ui.task_list import _ROLE_TYPE, TaskList
+from task_manager_desktop.ui.terminal.terminal_canvas import TerminalCanvas
 
 
 @pytest.fixture
@@ -27,8 +28,7 @@ def _mk(tid: str, *, status: Status = Status.PENDING, order_index: int = 0) -> T
         id=tid,
         title=f"task-{tid}",
         status=status,
-        type=TaskType.OFFLINE,
-        projeto="alpha",
+        type=TaskType.HUMAN,
         deps=[],
         notes="",
         order_index=order_index,
@@ -150,7 +150,6 @@ def test_controller_fires_callback_directly(qtbot):
     called: list[str] = []
     cbs = {
         "edit_selected": lambda: called.append("edit"),
-        "focus_search": lambda: called.append("focus"),
         "delete_selected": lambda: called.append("delete"),
     }
     sc = ShortcutsController(win, cbs)
@@ -161,11 +160,8 @@ def test_controller_fires_callback_directly(qtbot):
     for s in sc._shortcuts:
         if s.key() == QKeySequence("Ctrl+E"):
             s.activated.emit()
-        elif s.key() == QKeySequence("Ctrl+F"):
-            s.activated.emit()
 
     assert "edit" in called
-    assert "focus" in called
 
 
 def test_controller_suppresses_destructive_when_focus_is_text(qtbot):
@@ -182,7 +178,7 @@ def test_controller_suppresses_destructive_when_focus_is_text(qtbot):
         win,
         {
             "delete_selected": lambda: called.append("delete"),
-            "focus_search": lambda: called.append("focus"),
+            "esc_handler": lambda: called.append("esc"),
         },
     )
     sc.install()
@@ -194,12 +190,12 @@ def test_controller_suppresses_destructive_when_focus_is_text(qtbot):
     for s in sc._shortcuts:
         if s.key() == QKeySequence("Delete"):
             s.activated.emit()
-        elif s.key() == QKeySequence("Ctrl+F"):
+        elif s.key() == QKeySequence("Esc"):
             s.activated.emit()
 
-    # delete must be suppressed; focus_search must NOT be suppressed
+    # delete must be suppressed; esc_handler must NOT be suppressed
     assert "delete" not in called
-    assert "focus" in called
+    assert "esc" in called
 
 
 def test_suppression_set_matches_spec():
@@ -235,6 +231,65 @@ def test_qlineedit_focus_also_suppresses_destructive(qtbot):
         if s.key() == QKeySequence("Delete"):
             s.activated.emit()
 
+    assert called == []
+
+
+def test_terminal_focus_suppresses_contextual_shortcuts(qtbot):
+    win = QMainWindow()
+    qtbot.addWidget(win)
+    terminal = QWidget(win)
+    terminal.setObjectName("TerminalCanvas")
+    terminal.setProperty("testid", "terminal-workspace-output")
+    terminal.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+    win.setCentralWidget(terminal)
+    win.show()
+    qtbot.waitExposed(win)
+    terminal.setFocus()
+
+    called: list[str] = []
+    sc = ShortcutsController(
+        win,
+        {
+            "open_selected": lambda: called.append("open"),
+            "esc_handler": lambda: called.append("esc"),
+        },
+    )
+    sc.install()
+    qtbot.wait(20)
+
+    for s in sc._shortcuts:
+        if s.key() in {QKeySequence("Return"), QKeySequence("Enter")}:
+            s.activated.emit()
+        elif s.key() == QKeySequence("Esc"):
+            s.activated.emit()
+
+    assert called == []
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
+def test_terminal_canvas_receives_enter_when_window_shortcut_is_installed(qtbot, key):
+    win = QMainWindow()
+    qtbot.addWidget(win)
+    terminal = TerminalCanvas(win)
+    win.setCentralWidget(terminal)
+    win.show()
+    qtbot.waitExposed(win)
+
+    called: list[str] = []
+    sc = ShortcutsController(
+        win,
+        {"open_selected": lambda: called.append("open")},
+    )
+    sc.install()
+
+    terminal.setFocus()
+    qtbot.waitUntil(terminal.hasFocus, timeout=1000)
+    sc._sync_shortcuts_enabled()
+
+    with qtbot.waitSignal(terminal.raw_key_pressed, timeout=300) as blocker:
+        qtbot.keyClick(terminal, key)
+
+    assert blocker.args == [b"\r"]
     assert called == []
 
 

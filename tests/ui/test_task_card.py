@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from PySide6.QtCore import Qt
 
 from task_manager_desktop.core.models import Status, Task, TaskType
 from task_manager_desktop.ui.task_card import TaskCard
@@ -22,8 +23,7 @@ def _make_task(**kwargs) -> Task:
         id="abc",
         title="Test",
         status=Status.PENDING,
-        type=TaskType.ONLINE,
-        projeto="forge",
+        type=TaskType.AGENT,
         deps=[],
     )
     defaults.update(kwargs)
@@ -39,6 +39,29 @@ def test_renders_three_rows(qtbot, callbacks):
     # id label e titulo aparecem no card
     assert card._id_label.text() == "abc"
     assert card._title_label.text() == "Test"
+
+
+def test_card_has_95_5_content_and_status_columns(qtbot, callbacks):
+    _, cbs = callbacks
+    task = _make_task(id="vc9")
+    card = TaskCard(task, cbs, [task])
+    qtbot.addWidget(card)
+    card.show()
+    qtbot.waitExposed(card)
+
+    layout = card.layout()
+    assert layout.stretch(0) == 95
+    assert layout.stretch(1) == 5
+    assert layout.contentsMargins().top() == 0
+    assert layout.contentsMargins().bottom() == 0
+    assert layout.spacing() == 0
+    assert card._content_col.property("testid") == "task-card-vc9-content"
+    assert card._status_col.property("testid") == "task-card-vc9-status-column"
+    assert card._seg_ctrl.parent() is card._status_col
+    assert card._actions_row.parent() is card._top_row
+    assert card._content_col.height() == card._status_col.height()
+    assert card._content_col.geometry().top() == card._status_col.geometry().top()
+    assert card._content_col.geometry().bottom() == card._status_col.geometry().bottom()
 
 
 def test_menu_has_editar_and_excluir(qtbot, callbacks):
@@ -79,6 +102,25 @@ def test_excluir_callback_invoked(qtbot, callbacks):
     assert calls["delete"] == ["abc"]
 
 
+def test_hover_actions_start_hidden_and_call_callbacks(qtbot, callbacks):
+    calls, cbs = callbacks
+    task = _make_task()
+    card = TaskCard(task, cbs, [task])
+    qtbot.addWidget(card)
+    card.show()
+
+    assert card._actions_row.isVisible() is False
+
+    card._set_hover_actions_visible(True)
+    assert card._actions_row.isVisible() is True
+
+    qtbot.mouseClick(card._edit_btn, Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(card._delete_btn, Qt.MouseButton.LeftButton)
+
+    assert calls["edit"] == ["abc"]
+    assert calls["delete"] == ["abc"]
+
+
 def test_segmented_reflects_current_status(qtbot, callbacks):
     _, cbs = callbacks
     task = _make_task(status=Status.IN_PROGRESS)
@@ -89,29 +131,22 @@ def test_segmented_reflects_current_status(qtbot, callbacks):
     assert card._seg_ctrl.btn_d.isChecked() is False
 
 
-def test_type_icon_online_tooltip(qtbot, callbacks):
+def test_type_icon_agent_tooltip(qtbot, callbacks):
     _, cbs = callbacks
-    task = _make_task(type=TaskType.ONLINE)
+    task = _make_task(type=TaskType.AGENT)
     card = TaskCard(task, cbs, [task])
     qtbot.addWidget(card)
-    assert card._type_icon.toolTip() == "online"
+    assert not card._type_icon.pixmap().isNull()
+    assert card._type_icon.toolTip() == "agent"
 
 
-def test_type_icon_offline_tooltip(qtbot, callbacks):
+def test_type_icon_human_tooltip(qtbot, callbacks):
     _, cbs = callbacks
-    task = _make_task(type=TaskType.OFFLINE)
+    task = _make_task(type=TaskType.HUMAN)
     card = TaskCard(task, cbs, [task])
     qtbot.addWidget(card)
-    assert card._type_icon.toolTip() == "offline"
-
-
-def test_project_hashtag_displayed(qtbot, callbacks):
-    _, cbs = callbacks
-    task = _make_task(projeto="systemforge")
-    card = TaskCard(task, cbs, [task])
-    qtbot.addWidget(card)
-    assert "#systemforge" in card._project_tag.text()
-    assert card._project_tag.toolTip() == "systemforge"
+    assert not card._type_icon.pixmap().isNull()
+    assert card._type_icon.toolTip() == "human"
 
 
 def test_border_reflects_in_progress_active(qtbot, callbacks):

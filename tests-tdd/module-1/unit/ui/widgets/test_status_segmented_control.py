@@ -12,7 +12,7 @@ from task_manager_desktop.ui.widgets.status_segmented_control import StatusSegme
 
 
 def _task(status: Status = Status.PENDING) -> Task:
-    return Task(id="t", title="T", status=status, type=TaskType.ONLINE, projeto="f", deps=[])
+    return Task(id="t", title="T", status=status, type=TaskType.AGENT, deps=[])
 
 
 # TID-1-2-017 | covers: TASK-2/ST002 segmented

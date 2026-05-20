@@ -48,14 +48,13 @@ def _fake_edit_dialog(data: dict):
 def test_edit_title_persists_no_sector_change(setup, monkeypatch):
     """AC-T-001: Editar titulo persiste sem mudar setor."""
     ctrl, repo, conn, db_path = setup
-    task = Task(id="abc", title="Original", type=TaskType.ONLINE, projeto="forge", deps=[])
+    task = Task(id="abc", title="Original", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Novo titulo",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -64,22 +63,20 @@ def test_edit_title_persists_no_sector_change(setup, monkeypatch):
     tasks = repo.list_active()
     assert len(tasks) == 1
     assert tasks[0].title == "Novo titulo"
-    assert tasks[0].projeto == "forge"
 
 
 def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
     """AC-T-002: Adicionar dep aberta move task de Fila para Bloqueadas."""
     ctrl, repo, conn, _ = setup
-    dep_task = Task(id="dep1", title="Dep pendente", type=TaskType.ONLINE, projeto="forge", deps=[])
-    main_task = Task(id="main", title="Principal", type=TaskType.ONLINE, projeto="forge", deps=[])
+    dep_task = Task(id="dep1", title="Dep pendente", type=TaskType.AGENT, deps=[])
+    main_task = Task(id="main", title="Principal", type=TaskType.AGENT, deps=[])
     repo.create(dep_task)
     repo.create(main_task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Principal",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": ["dep1"],  # adicionando dep aberta
     }))
 
@@ -97,16 +94,15 @@ def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
 def test_remove_last_dep_moves_to_waiting(setup, monkeypatch):
     """AC-T-003: Remover unica dep move task de Bloqueadas para Fila."""
     ctrl, repo, conn, _ = setup
-    dep_task = Task(id="dep1", title="Dep", type=TaskType.ONLINE, projeto="forge", deps=[])
-    main_task = Task(id="main", title="Principal", type=TaskType.ONLINE, projeto="forge", deps=["dep1"])
+    dep_task = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
+    main_task = Task(id="main", title="Principal", type=TaskType.AGENT, deps=["dep1"])
     repo.create(dep_task)
     repo.create(main_task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Principal",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],  # removendo dep
     }))
 
@@ -126,9 +122,9 @@ def test_cycle_edit_drops_cycle_dep(setup, monkeypatch):
     """AC-T-004: Ciclo na edicao resulta em drop da dep ciclica."""
     ctrl, repo, conn, _ = setup
     # A -> B, B -> C; editar C para adicionar A (criaria ciclo C->A->B->C)
-    a = Task(id="a", title="A", type=TaskType.ONLINE, projeto="f", deps=["b"])
-    b = Task(id="b", title="B", type=TaskType.ONLINE, projeto="f", deps=["c"])
-    c = Task(id="c", title="C", type=TaskType.ONLINE, projeto="f", deps=[])
+    a = Task(id="a", title="A", type=TaskType.AGENT, deps=["b"])
+    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["c"])
+    c = Task(id="c", title="C", type=TaskType.AGENT, deps=[])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -136,8 +132,7 @@ def test_cycle_edit_drops_cycle_dep(setup, monkeypatch):
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "C",
-        "type": TaskType.ONLINE,
-        "projeto": "f",
+        "type": TaskType.AGENT,
         "deps": ["a"],  # criaria ciclo: C -> A -> B -> C
     }))
 
@@ -151,14 +146,13 @@ def test_cycle_edit_drops_cycle_dep(setup, monkeypatch):
 def test_change_type_persists(setup, monkeypatch):
     """AC-T-006: Trocar type persiste no banco."""
     ctrl, repo, conn, _ = setup
-    task = Task(id="abc", title="X", type=TaskType.ONLINE, projeto="f", deps=[])
+    task = Task(id="abc", title="X", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "X",
-        "type": TaskType.OFFLINE,
-        "projeto": "f",
+        "type": TaskType.HUMAN,
         "deps": [],
     }))
 
@@ -166,52 +160,13 @@ def test_change_type_persists(setup, monkeypatch):
 
     tasks = repo.list_active()
     updated = next(t for t in tasks if t.id == "abc")
-    assert updated.type == TaskType.OFFLINE
-
-
-def test_rename_projeto_emits_projects_changed(setup, monkeypatch, qtbot):
-    """AC-T-007: Renomear projeto emite projects_changed."""
-    ctrl, repo, conn, _ = setup
-    task = Task(id="abc", title="X", type=TaskType.ONLINE, projeto="antigo", deps=[])
-    repo.create(task)
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "X",
-        "type": TaskType.ONLINE,
-        "projeto": "novo",
-        "deps": [],
-    }))
-
-    with qtbot.waitSignal(ctrl.projects_changed, timeout=1000):
-        ctrl.handle_edit(task)
-
-
-def test_empty_projeto_normalizes_to_outros(setup, monkeypatch):
-    """AC-T-008: Esvaziar projeto re-normaliza para 'outros'."""
-    ctrl, repo, conn, _ = setup
-    task = Task(id="abc", title="X", type=TaskType.ONLINE, projeto="forge", deps=[])
-    repo.create(task)
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "X",
-        "type": TaskType.ONLINE,
-        "projeto": "outros",  # normalized de vazio
-        "deps": [],
-    }))
-
-    ctrl.handle_edit(task)
-
-    tasks = repo.list_active()
-    updated = next(t for t in tasks if t.id == "abc")
-    assert updated.projeto == "outros"
+    assert updated.type == TaskType.HUMAN
 
 
 def test_io_error_shows_error_dialog_no_corruption(setup, monkeypatch):
     """AC-T-015: Erro I/O nao corrompe estado em memoria."""
     ctrl, repo, conn, _ = setup
-    task = Task(id="abc", title="Original", type=TaskType.ONLINE, projeto="forge", deps=[])
+    task = Task(id="abc", title="Original", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     error_shown = []
@@ -225,8 +180,7 @@ def test_io_error_shows_error_dialog_no_corruption(setup, monkeypatch):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Novo",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)
@@ -248,9 +202,9 @@ def test_recalc_only_direct_dependents_not_grandchildren(setup, monkeypatch):
     """RF-008: Recalculo cobre UM NIVEL — editar A nao recalcula setor de C que depende de B."""
     ctrl, repo, conn, _ = setup
     # Cadeia: A <- B <- C (C depende de B, B depende de A)
-    a = Task(id="a", title="A", type=TaskType.ONLINE, projeto="f", deps=[])
-    b = Task(id="b", title="B", type=TaskType.ONLINE, projeto="f", deps=["a"])
-    c = Task(id="c", title="C", type=TaskType.ONLINE, projeto="f", deps=["b"])
+    a = Task(id="a", title="A", type=TaskType.AGENT, deps=[])
+    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["a"])
+    c = Task(id="c", title="C", type=TaskType.AGENT, deps=["b"])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -259,8 +213,7 @@ def test_recalc_only_direct_dependents_not_grandchildren(setup, monkeypatch):
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "A editada",
-        "type": TaskType.ONLINE,
-        "projeto": "f",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
 

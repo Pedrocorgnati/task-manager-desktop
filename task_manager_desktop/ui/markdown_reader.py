@@ -29,6 +29,8 @@ class MarkdownReader(QWidget):
     _IDX_EDITOR = 1
 
     switch_blocked = Signal(str)
+    toggle_terminal_collapse_requested = Signal()
+    send_to_terminal_requested = Signal(str)
 
     def __init__(
         self,
@@ -36,6 +38,7 @@ class MarkdownReader(QWidget):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self.setProperty("testid", "markdown-reader")
         self._pane = MarkdownPane(repo=repo, parent=self)
 
         layout = QVBoxLayout(self)
@@ -48,6 +51,18 @@ class MarkdownReader(QWidget):
         # never happens during editing (the inner editor has focus). Avoids double-save.
         self._save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self)
         self._save_shortcut.activated.connect(self._pane._save)
+
+        # Bubble: pane → reader (consumido pelo app.py para o vertical splitter terminal).
+        self._pane.toggle_terminal_collapse_requested.connect(
+            self.toggle_terminal_collapse_requested.emit
+        )
+        self._pane.send_to_terminal_requested.connect(
+            self.send_to_terminal_requested.emit
+        )
+
+    def set_terminal_collapsed(self, collapsed: bool) -> None:
+        """Atualiza o chevron do toolbar (▲ colapsado / ▼ expandido)."""
+        self._pane._toolbar.set_terminal_collapsed(collapsed)
 
     # ------------------------------------------------------------------
     # Backward-compat proxy properties

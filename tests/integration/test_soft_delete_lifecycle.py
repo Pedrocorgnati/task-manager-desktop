@@ -45,7 +45,7 @@ def _task(id: str, title: str = "T", status: Status = Status.PENDING,
           completed_at: str | None = None) -> Task:
     return Task(
         id=id, title=title, status=status,
-        type=TaskType.ONLINE, projeto="outros", deps=[],
+        type=TaskType.AGENT, deps=[],
         completed_at=completed_at,
     )
 

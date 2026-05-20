@@ -5,11 +5,9 @@ import pytest
 
 from task_manager_desktop.core.models import (
     Color,
-    PROJETO_DEFAULT,
     Sector,
     Status,
     TaskType,
-    normalize_projeto,
     parse_deps,
 )
 
@@ -40,10 +38,10 @@ class TestStatusEnum:
 class TestTaskTypeEnum:
     """TID-0-2-004 | covers: TASK-2/ST001 BDD#4 | suite: unit"""
 
-    def test_tasktype_enum_tem_exatamente_2_membros(self):
+    def test_tasktype_enum_tem_exatamente_3_membros(self):
         values = {t.value for t in TaskType}
-        assert values == {"online", "offline"}
-        assert len(TaskType) == 2
+        assert values == {"agent", "dev", "human"}
+        assert len(TaskType) == 3
 
 
 class TestSectorEnum:
@@ -63,24 +61,3 @@ class TestColorEnum:
         assert len(Color) == len(Sector)
 
 
-class TestNormalizeProjetoNone:
-    """TID-0-2-007 | covers: TASK-2/ST001 BDD#5 | suite: unit | classification: EDGE"""
-
-    def test_normalize_projeto_none_retorna_projeto_default(self):
-        assert normalize_projeto(None) == PROJETO_DEFAULT
-        assert PROJETO_DEFAULT == "outros"
-
-
-class TestNormalizeProjetoEspacos:
-    """TID-0-2-008 | covers: TASK-2/ST001 BDD#6 | suite: unit | classification: EDGE"""
-
-    def test_normalize_projeto_espacos_retorna_projeto_default(self):
-        assert normalize_projeto("   ") == PROJETO_DEFAULT
-
-
-class TestNormalizeProjetoVerbatim:
-    """TID-0-2-009 | covers: TASK-2/ST001 BDD#7 | suite: unit"""
-
-    def test_normalize_projeto_preserva_valor_verbatim(self):
-        assert normalize_projeto("alpha") == "alpha"
-        assert normalize_projeto("Alpha") == "Alpha"

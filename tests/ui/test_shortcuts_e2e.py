@@ -34,8 +34,7 @@ def _make_task(repo: TaskRepository, *, tid: str, title: str) -> Task:
         id=tid,
         title=title,
         status=Status.PENDING,
-        type=TaskType.OFFLINE,
-        projeto="alpha",
+        type=TaskType.HUMAN,
         deps=[],
         notes="",
         order_index=1,
@@ -50,12 +49,10 @@ def _make_task(repo: TaskRepository, *, tid: str, title: str) -> Task:
 # ------------------------------------------------------------------
 
 
-def test_shortcut_map_covers_all_9_rf011_keys():
+def test_shortcut_map_covers_active_rf011_keys():
     expected = {
         "Ctrl+E",
         "Ctrl+D",
-        "Ctrl+F",
-        "Ctrl+Backspace",
         "Up",
         "Down",
         "Return",
@@ -68,7 +65,7 @@ def test_shortcut_map_covers_all_9_rf011_keys():
 
 
 def test_suppression_set_excludes_global_shortcuts():
-    global_keys = {"focus_search", "clear_search", "esc_handler"}
+    global_keys = {"esc_handler"}
     assert _SUPPRESS_IN_TEXT.isdisjoint(global_keys), (
         "Global shortcuts must never be suppressed in text fields"
     )
@@ -135,26 +132,16 @@ def test_delete_selected_is_noop_without_selection(qtbot, repo):
 # ------------------------------------------------------------------
 
 
-def test_esc_handler_hierarchy_search_before_deselect():
-    """Esc clears search focus before deselecting task (hierarchy level 2 < 3).
-
-    Tests the handler logic directly using simulated focus state — Qt focus does
-    not propagate in headless test environments, so we verify the control flow.
-    """
+def test_esc_handler_hierarchy_deselect_without_search_level():
+    """Esc now skips removed search level and deselects when no modal is active."""
     task_deselected: list[bool] = []
-    search_unfocused: list[bool] = []
-    _search_has_focus = True
 
     def _handle_escape() -> None:
-        if _search_has_focus:
-            search_unfocused.append(True)
-            return
         task_deselected.append(True)
 
     _handle_escape()
 
-    assert search_unfocused == [True]
-    assert task_deselected == []
+    assert task_deselected == [True]
 
 
 # ------------------------------------------------------------------

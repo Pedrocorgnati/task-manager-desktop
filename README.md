@@ -210,7 +210,7 @@ Se voce vem de Todoist, Things, Notion ou outro gerenciador, **nao ha importador
 1. **Exportar a lista** da ferramenta de origem (CSV, OPML, Markdown — o que estiver disponivel).
 2. **Filtrar so o que esta ativo** — tarefas concluidas ficam no historico antigo; nao recrie.
 3. **Criar tasks no app** uma a uma, via `Ctrl+N` ou botao `+` no header.
-4. **Preencher os 4 campos** do dialog: titulo, tipo (online/offline), projeto (opcional — vazio vira `outros`), dependencias (opcional — IDs separados por virgula).
+4. **Preencher os 4 campos** do dialog: titulo, tipo (agent/human), projeto (opcional — vazio vira `outros`), dependencias (opcional — IDs separados por virgula).
 
 ### Representando subtasks via dependencias
 

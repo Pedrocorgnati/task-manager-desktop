@@ -1,43 +1,75 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QSize, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QComboBox,
+    QButtonGroup,
+    QCheckBox,
+    QGridLayout,
     QHBoxLayout,
-    QLineEdit,
     QPushButton,
-    QSizePolicy,
     QToolButton,
+    QVBoxLayout,
     QWidget,
 )
 
+from task_manager_desktop.core.models import TaskType
+
 from task_manager_desktop.ui.icons import (
+    BROOM_SVG,
+    LAYOUT_STACK_SVG,
     TRASH_SVG,
     svg_to_icon,
 )
 
-_ALL_PROJECTS_LABEL = "Todos"
-_SEARCH_DEBOUNCE_MS = 150
+
+_TEST_MODE_BTN_STYLE_ALL = (
+    "QPushButton { background-color: transparent; color: #60A5FA;"
+    "  border: 1px solid #2563EB; border-radius: 6px;"
+    "  font-size: 10px; font-weight: 600; padding: 0 1px; }"
+    "QPushButton:hover { color: #FAFAFA; background-color: #1E3A8A;"
+    "  border-color: #3B82F6; }"
+    "QPushButton:checked { background-color: #2563EB; color: #FAFAFA;"
+    "  border-color: #2563EB; font-weight: 700; }"
+)
+_TEST_MODE_BTN_STYLE_BODY = (
+    "QPushButton { background-color: transparent; color: #F87171;"
+    "  border: 1px solid #DC2626; border-radius: 6px;"
+    "  font-size: 10px; font-weight: 600; padding: 0 1px; }"
+    "QPushButton:hover { color: #FAFAFA; background-color: #7F1D1D;"
+    "  border-color: #EF4444; }"
+    "QPushButton:checked { background-color: #DC2626; color: #FAFAFA;"
+    "  border-color: #DC2626; font-weight: 700; }"
+)
+_TEST_MODE_BTN_STYLE_BTN = (
+    "QPushButton { background-color: transparent; color: #60A5FA;"
+    "  border: 1px solid #2563EB; border-radius: 6px;"
+    "  font-size: 10px; font-weight: 600; padding: 0 1px; }"
+    "QPushButton:hover { color: #FAFAFA; background-color: #1E3A8A;"
+    "  border-color: #3B82F6; }"
+    "QPushButton:checked { background-color: #2563EB; color: #FAFAFA;"
+    "  border-color: #2563EB; font-weight: 700; }"
+)
 
 
 class HeaderBar(QWidget):
     new_task_requested = Signal()
-    search_text_changed = Signal(str)
-    project_filter_changed = Signal(object)  # str | None; None = "Todos"
+    type_filter_changed = Signal(object)  # frozenset[str]
     clear_completed_clicked = Signal()
     trash_clicked = Signal()
+    # DataTest test-mode: emits "off" | "all" | "body" | "buttons"
+    test_mode_changed = Signal(str)
+    datatest_terminal_write_toggled = Signal(bool)
+    terminal_layout_mode_toggled = Signal(bool)
+    terminal_collapse_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFixedHeight(58)
         self.setObjectName("HeaderBar")
+        self.setProperty("testid", "header")
         self.setAccessibleName("Barra de cabeçalho")
-
-        self._search_debounce = QTimer(self)
-        self._search_debounce.setSingleShot(True)
-        self._search_debounce.setInterval(_SEARCH_DEBOUNCE_MS)
-        self._search_debounce.timeout.connect(self._emit_search_changed)
+        self._type_checkboxes: dict[str, QCheckBox] = {}
 
         self._build_ui()
 
@@ -49,7 +81,14 @@ class HeaderBar(QWidget):
         layout.setContentsMargins(16, 0, 16, 0)
         layout.setSpacing(8)
 
-        self.btn_new = QPushButton("+", self)
+        self._primary_controls = QWidget(self)
+        self._primary_controls.setObjectName("headerPrimaryControls")
+        self._primary_controls.setProperty("testid", "header-primary-controls")
+        primary_layout = QHBoxLayout(self._primary_controls)
+        primary_layout.setContentsMargins(0, 0, 0, 0)
+        primary_layout.setSpacing(8)
+
+        self.btn_new = QPushButton("+", self._primary_controls)
         self.btn_new.setProperty("class", "primary")
         self.btn_new.setProperty("testid", "header-new-task-button")
         self.btn_new.setFixedSize(40, 40)
@@ -58,45 +97,45 @@ class HeaderBar(QWidget):
         self.btn_new.setAccessibleDescription("Atalho Ctrl+N")
         self.btn_new.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_new.clicked.connect(self.new_task_requested.emit)
-        layout.addWidget(self.btn_new)
+        primary_layout.addWidget(self.btn_new)
 
-        self._search = QLineEdit(self)
-        self._search.setObjectName("headerSearch")
-        self._search.setProperty("testid", "header-search-input")
-        self._search.setPlaceholderText("Buscar por título ou notas... (Ctrl+F)")
-        self._search.setClearButtonEnabled(True)
-        self._search.setAccessibleName("Campo de busca por título ou notas")
-        self._search.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._search.setMinimumWidth(280)
-        self._search.setFixedHeight(40)
-        self._search.textChanged.connect(self._on_search_text_changed)
-        layout.addWidget(self._search, 1)
+        self._type_filter = QWidget(self._primary_controls)
+        self._type_filter.setObjectName("headerTypeFilter")
+        self._type_filter.setProperty("testid", "header-type-filter")
+        self._type_filter.setAccessibleName("Filtro por tipo de task")
+        self._type_filter.setFixedHeight(54)
+        type_layout = QVBoxLayout(self._type_filter)
+        type_layout.setContentsMargins(10, 1, 10, 1)
+        type_layout.setSpacing(0)
+        for task_type in (TaskType.HUMAN, TaskType.DEV, TaskType.AGENT):
+            checkbox = QCheckBox(task_type.value, self._type_filter)
+            checkbox.setObjectName(f"headerTypeFilter{task_type.value.title()}")
+            checkbox.setProperty("testid", f"header-type-filter-{task_type.value}")
+            checkbox.setAccessibleName(f"Filtrar tasks {task_type.value}")
+            checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+            checkbox.setChecked(True)
+            checkbox.setFixedHeight(17)
+            checkbox.toggled.connect(self._on_type_filter_changed)
+            self._type_checkboxes[task_type.value] = checkbox
+            type_layout.addWidget(checkbox)
+        primary_layout.addWidget(self._type_filter)
 
-        self._project_filter = QComboBox(self)
-        self._project_filter.setObjectName("headerProjectFilter")
-        self._project_filter.setProperty("testid", "header-project-filter")
-        self._project_filter.setAccessibleName("Filtro por projeto")
-        self._project_filter.setMinimumWidth(140)
-        self._project_filter.setMaximumWidth(200)
-        self._project_filter.setFixedHeight(40)
-        self._project_filter.addItem(_ALL_PROJECTS_LABEL)
-        self._project_filter.currentIndexChanged.connect(self._on_project_changed)
-        layout.addWidget(self._project_filter)
-
-        self._btn_clear_done = QPushButton("Limpar concluídas", self)
-        self._btn_clear_done.setProperty("class", "ghost-sm")
+        self._btn_clear_done = QToolButton(self._primary_controls)
+        self._btn_clear_done.setObjectName("headerClearDone")
         self._btn_clear_done.setProperty("testid", "header-clear-done-button")
         self._btn_clear_done.setAccessibleName(
             "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
         )
         self._btn_clear_done.setToolTip("Nenhuma task concluída visível")  # default: disabled
         self._btn_clear_done.setEnabled(False)  # disabled by default
-        self._btn_clear_done.setMinimumHeight(40)
+        self._btn_clear_done.setIcon(svg_to_icon(BROOM_SVG, 20))
+        self._btn_clear_done.setIconSize(QSize(20, 20))
+        self._btn_clear_done.setFixedSize(40, 40)
         self._btn_clear_done.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_clear_done.clicked.connect(self.clear_completed_clicked.emit)
-        layout.addWidget(self._btn_clear_done)
+        primary_layout.addWidget(self._btn_clear_done)
 
-        self._btn_trash = QToolButton(self)
+        self._btn_trash = QToolButton(self._primary_controls)
         self._btn_trash.setObjectName("headerTrash")
         self._btn_trash.setProperty("testid", "header-trash-button")
         self._btn_trash.setAccessibleName("Abrir Lixeira de tasks")
@@ -106,25 +145,120 @@ class HeaderBar(QWidget):
         self._btn_trash.setFixedSize(40, 40)
         self._btn_trash.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_trash.clicked.connect(self.trash_clicked.emit)
-        layout.addWidget(self._btn_trash)
+        primary_layout.addWidget(self._btn_trash)
 
-        # ─── DataTest Debug Button (Ctrl+Shift+D) ──────────────────
-        self._btn_datatest = QPushButton("DataTest")
-        self._btn_datatest.setFixedSize(68, 32)
+        layout.addWidget(self._primary_controls)
+        layout.addStretch(1)
+
+        self._btn_terminal_layout = QToolButton(self)
+        self._btn_terminal_layout.setObjectName("headerTerminalLayout")
+        self._btn_terminal_layout.setProperty("testid", "header-terminal-layout-button")
+        self._btn_terminal_layout.setAccessibleName("Alternar layout do terminal")
+        self._btn_terminal_layout.setToolTip("Layout row: terminal no reader")
+        self._btn_terminal_layout.setIcon(svg_to_icon(LAYOUT_STACK_SVG, 20))
+        self._btn_terminal_layout.setIconSize(QSize(20, 20))
+        self._btn_terminal_layout.setFixedSize(40, 40)
+        self._btn_terminal_layout.setCheckable(True)
+        self._btn_terminal_layout.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_terminal_layout.toggled.connect(self._on_terminal_layout_toggled)
+        layout.addWidget(self._btn_terminal_layout)
+
+        self._btn_terminal_collapse = QToolButton(self)
+        self._btn_terminal_collapse.setObjectName("headerTerminalCollapse")
+        self._btn_terminal_collapse.setProperty("testid", "terminal-workspace-collapse")
+        self._btn_terminal_collapse.setAccessibleName("Alternar terminal")
+        self._btn_terminal_collapse.setText("▲")
+        self._btn_terminal_collapse.setToolTip("Expandir terminal (Ctrl+J)")
+        self._btn_terminal_collapse.setFixedSize(40, 40)
+        self._btn_terminal_collapse.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_terminal_collapse.clicked.connect(self.terminal_collapse_requested.emit)
+        layout.addWidget(self._btn_terminal_collapse)
+
+        # Test-mode Buttons (Data / Body / Btn) + terminal-write checkbox.
+        # Comportamento radio-like: no maximo 1 checado. Re-click desliga (-> off).
+        self._btn_datatest = QPushButton("Data")
+        self._btn_datatest.setFixedSize(68, 16)
         self._btn_datatest.setCheckable(True)
-        self._btn_datatest.setToolTip("Exibir objectNames (Ctrl+Shift+D)")
-        self._btn_datatest.setProperty("testid", "header-datatest-button")
+        self._btn_datatest.setToolTip("Exibir todos os data-testid (Ctrl+Shift+D)")
         self._btn_datatest.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._btn_datatest.setStyleSheet(
-            "QPushButton { background-color: transparent; color: #A1A1AA;"
-            "  border: 1px solid #52525B; border-radius: 6px;"
-            "  font-size: 11px; font-weight: 600; padding: 0 6px; }"
-            "QPushButton:hover { color: #FAFAFA; background-color: #3F3F46;"
-            "  border-color: #71717A; }"
-            "QPushButton:checked { background-color: #DC2626; color: #FAFAFA;"
-            "  border-color: #DC2626; font-weight: 700; }"
+        self._btn_datatest.setStyleSheet(_TEST_MODE_BTN_STYLE_ALL)
+
+        self._btn_bodytest = QPushButton("Body")
+        self._btn_bodytest.setFixedSize(68, 16)
+        self._btn_bodytest.setCheckable(True)
+        self._btn_bodytest.setToolTip("Exibir data-testid EXCETO em botoes (Ctrl+Shift+B)")
+        self._btn_bodytest.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_bodytest.setStyleSheet(_TEST_MODE_BTN_STYLE_BODY)
+
+        self._btn_btntest = QPushButton("Btn")
+        self._btn_btntest.setFixedSize(68, 16)
+        self._btn_btntest.setCheckable(True)
+        self._btn_btntest.setToolTip("Exibir data-testid APENAS em botoes (Ctrl+Shift+T)")
+        self._btn_btntest.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_btntest.setStyleSheet(_TEST_MODE_BTN_STYLE_BTN)
+
+        self._datatest_terminal_checkbox = QCheckBox(self)
+        self._datatest_terminal_checkbox.setObjectName("headerDataTestTerminalToggle")
+        self._datatest_terminal_checkbox.setProperty("testid", "header-datatest-terminal-checkbox")
+        self._datatest_terminal_checkbox.setFixedSize(16, 16)
+        self._datatest_terminal_checkbox.setToolTip(
+            "Ao clicar no overlay, envia seletor para o terminal e foca no terminal"
         )
-        layout.addWidget(self._btn_datatest)
+        self._datatest_terminal_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._datatest_terminal_checkbox.setStyleSheet(
+            "QCheckBox::indicator {"
+            " width: 12px; height: 12px; border-radius: 3px;"
+            " border: 1px solid #9CA3AF; background-color: #E5E7EB; }"
+            "QCheckBox::indicator:checked {"
+            " border: 1px solid #6B7280; background-color: #4B5563; }"
+        )
+        self._datatest_terminal_checkbox.toggled.connect(self.datatest_terminal_write_toggled.emit)
+
+        self._test_mode_grid = QWidget(self)
+        self._test_mode_grid.setProperty("testid", "header-test-mode-grid")
+        _tm_grid_layout = QGridLayout(self._test_mode_grid)
+        _tm_grid_layout.setContentsMargins(0, 0, 0, 0)
+        _tm_grid_layout.setHorizontalSpacing(4)
+        _tm_grid_layout.setVerticalSpacing(2)
+        _tm_grid_layout.addWidget(
+            self._datatest_terminal_checkbox,
+            0,
+            0,
+            alignment=Qt.AlignmentFlag.AlignCenter,
+        )
+        _tm_grid_layout.addWidget(self._btn_datatest, 0, 1)
+        _tm_grid_layout.addWidget(self._btn_bodytest, 1, 0)
+        _tm_grid_layout.addWidget(self._btn_btntest, 1, 1)
+        # Nao entra no layout do header: a grid e reparentada como overlay
+        # no canto inferior direito da coluna 1 via take_test_mode_grid().
+
+        # QButtonGroup com exclusive=False; logica radio manual no handler.
+        # exclusive=True bloquearia o re-click de desligar o ativo.
+        self._test_mode_group = QButtonGroup(self)
+        self._test_mode_group.setExclusive(False)
+        self._test_mode_group.addButton(self._btn_datatest)
+        self._test_mode_group.addButton(self._btn_bodytest)
+        self._test_mode_group.addButton(self._btn_btntest)
+
+        self._test_mode_buttons: dict[str, QPushButton] = {
+            "all": self._btn_datatest,
+            "body": self._btn_bodytest,
+            "buttons": self._btn_btntest,
+        }
+        # Flag para evitar reentrancia quando desligamos os outros botoes.
+        self._test_mode_syncing = False
+        for btn in self._test_mode_buttons.values():
+            btn.toggled.connect(self._on_test_mode_button_toggled)
+
+    def take_primary_controls(self) -> QWidget:
+        self._primary_controls.setParent(None)
+        return self._primary_controls
+
+    def take_test_mode_grid(self) -> QWidget:
+        """Entrega a grid de test-mode para ser ancorada fora do header
+        (overlay no canto inferior direito da coluna 1 — task-list-pane)."""
+        self._test_mode_grid.setParent(None)
+        return self._test_mode_grid
 
     # ------------------------------------------------------------------
     # External shortcut hook (Ctrl+N) — unchanged contract
@@ -132,17 +266,6 @@ class HeaderBar(QWidget):
     def install_shortcut(self, parent: QWidget) -> None:
         shortcut = QShortcut(QKeySequence("Ctrl+N"), parent)
         shortcut.activated.connect(self.new_task_requested.emit)
-
-    # ------------------------------------------------------------------
-    # Properties for external access
-    # ------------------------------------------------------------------
-    @property
-    def search_field(self) -> QLineEdit:
-        return self._search
-
-    @property
-    def combo(self) -> QComboBox:
-        return self._project_filter
 
     # ------------------------------------------------------------------
     # Clear Done Button State Control
@@ -156,75 +279,91 @@ class HeaderBar(QWidget):
                 "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
             )
         else:
-            self._btn_clear_done.setToolTip("")
+            self._btn_clear_done.setToolTip("Mover tasks concluídas para a Lixeira")
             self._btn_clear_done.setAccessibleName("Mover tasks concluídas para a Lixeira")
 
     # ------------------------------------------------------------------
-    # Search
+    # Type filter
     # ------------------------------------------------------------------
-    def _on_search_text_changed(self, _text: str) -> None:
-        self._search_debounce.start()
+    def _on_type_filter_changed(self, _checked: bool) -> None:
+        self.type_filter_changed.emit(self.current_task_types())
 
-    def _emit_search_changed(self) -> None:
-        self.search_text_changed.emit(self._search.text())
-
-    def clear_search(self) -> None:
-        self._search.clear()
-        self._search_debounce.stop()
-        self.search_text_changed.emit("")
-
-    def focus_search(self) -> None:
-        self._search.setFocus(Qt.FocusReason.ShortcutFocusReason)
-        self._search.selectAll()
-
-    def search_has_focus(self) -> bool:
-        return self._search.hasFocus()
-
-    def clear_search_focus(self) -> None:
-        self._search.clearFocus()
+    def current_task_types(self) -> frozenset[str]:
+        return frozenset(
+            value
+            for value, checkbox in self._type_checkboxes.items()
+            if checkbox.isChecked()
+        )
 
     # ------------------------------------------------------------------
-    # ProjectFilter
+    # Test-mode (DataTest / BodyTest / BtnTest)
     # ------------------------------------------------------------------
-    def _on_project_changed(self, _idx: int) -> None:
-        self._update_project_active_state()
-        value = self.current_project()
-        self.project_filter_changed.emit(value)
+    def _on_test_mode_button_toggled(self, checked: bool) -> None:
+        """Mantem exclusividade manual (no max 1 checado) e emite test_mode_changed.
 
-    def _update_project_active_state(self) -> None:
-        active = self.current_project() is not None
-        self._project_filter.setProperty("active", "true" if active else "false")
-        self._project_filter.style().unpolish(self._project_filter)
-        self._project_filter.style().polish(self._project_filter)
-        self._project_filter.update()
+        Comportamento radio-like:
+        - Ativar um botao desliga os outros dois.
+        - Re-click no botao ativo desliga (modo "off").
+        """
+        if self._test_mode_syncing:
+            return
+        sender = self.sender()
+        self._test_mode_syncing = True
+        try:
+            if checked:
+                for btn in self._test_mode_buttons.values():
+                    if btn is not sender and btn.isChecked():
+                        btn.setChecked(False)
+        finally:
+            self._test_mode_syncing = False
 
-    def current_project(self) -> str | None:
-        text = self._project_filter.currentText()
-        if text == _ALL_PROJECTS_LABEL:
-            return None
-        return text
+        mode = "off"
+        for key, btn in self._test_mode_buttons.items():
+            if btn.isChecked():
+                mode = key
+                break
+        self.test_mode_changed.emit(mode)
 
-    def set_projects(self, projects: list[str]) -> None:
-        previous = self._project_filter.currentText()
-        unique_sorted = sorted({p for p in projects if p and p != _ALL_PROJECTS_LABEL})
+    def toggle_test_mode(self, mode: str) -> None:
+        """Ativa o modo informado, ou desliga se ja estiver ativo.
 
-        self._project_filter.blockSignals(True)
-        self._project_filter.clear()
-        self._project_filter.addItem(_ALL_PROJECTS_LABEL)
-        for proj in unique_sorted:
-            self._project_filter.addItem(proj)
+        Usado pelos atalhos de teclado para manter UI sincronizada.
+        """
+        if mode not in ("all", "body", "buttons"):
+            self._set_all_test_mode_buttons(False)
+            return
+        target_btn = self._test_mode_buttons[mode]
+        target_btn.setChecked(not target_btn.isChecked())
 
-        target_idx = 0
-        if previous in unique_sorted:
-            target_idx = self._project_filter.findText(previous)
-        self._project_filter.setCurrentIndex(max(0, target_idx))
-        self._project_filter.blockSignals(False)
+    def _set_all_test_mode_buttons(self, checked: bool) -> None:
+        self._test_mode_syncing = True
+        try:
+            for btn in self._test_mode_buttons.values():
+                btn.setChecked(checked)
+        finally:
+            self._test_mode_syncing = False
+        if not checked:
+            self.test_mode_changed.emit("off")
 
-        self._update_project_active_state()
+    def current_test_mode(self) -> str:
+        for key, btn in self._test_mode_buttons.items():
+            if btn.isChecked():
+                return key
+        return "off"
 
-        if previous != self._project_filter.currentText():
-            self.project_filter_changed.emit(self.current_project())
+    def is_terminal_write_enabled(self) -> bool:
+        return self._datatest_terminal_checkbox.isChecked()
 
-    # Alias for backward compat with caller code using Portuguese naming
-    def set_projetos(self, projects: list[str]) -> None:
-        self.set_projects(projects)
+    def _on_terminal_layout_toggled(self, checked: bool) -> None:
+        self._btn_terminal_layout.setToolTip(
+            "Layout column: terminal abaixo de todo o app"
+            if checked
+            else "Layout row: terminal no reader"
+        )
+        self.terminal_layout_mode_toggled.emit(checked)
+
+    def set_terminal_collapsed(self, collapsed: bool) -> None:
+        self._btn_terminal_collapse.setText("▲" if collapsed else "▼")
+        self._btn_terminal_collapse.setToolTip(
+            "Expandir terminal (Ctrl+J)" if collapsed else "Colapsar terminal (Ctrl+J)"
+        )

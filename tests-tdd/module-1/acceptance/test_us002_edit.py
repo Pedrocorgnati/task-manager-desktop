@@ -1,8 +1,7 @@
 # suite: acceptance | module: module-1-gestao-de-tasks | task: TASK-2
 # @tdd-locked: do not edit without /tdd:unlock
-# covers: US-002 (cenarios 1-7) — Editar titulo, tipo, projeto e dependencias
-# TIDs: TID-1-2-001, TID-1-2-002, TID-1-2-003, TID-1-2-004, TID-1-2-005,
-#        TID-1-2-006, TID-1-2-007
+# covers: US-002 (cenarios 1-5) — Editar titulo, tipo e dependencias
+# TIDs: TID-1-2-001, TID-1-2-002, TID-1-2-003, TID-1-2-004, TID-1-2-005
 from __future__ import annotations
 
 import sqlite3
@@ -53,14 +52,13 @@ def _fake_edit_dialog(data: dict):
 def test_edit_title_persists_no_sector_change(setup, monkeypatch):
     """Edicao apenas do titulo persiste e card atualiza sem mudar setor."""
     ctrl, repo, conn, db_path = setup
-    task = Task(id="t1", title="Original", type=TaskType.ONLINE, projeto="forge", deps=[])
+    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Editado",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -70,7 +68,6 @@ def test_edit_title_persists_no_sector_change(setup, monkeypatch):
     assert len(tasks) == 1
     updated = tasks[0]
     assert updated.title == "Editado"
-    assert updated.projeto == "forge"
     assert updated.deps == []
 
     all_tasks = {t.id: t for t in tasks}
@@ -83,16 +80,15 @@ def test_edit_title_persists_no_sector_change(setup, monkeypatch):
 def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
     """Adicao de dep aberta move task de Fila para Bloqueadas com recalc."""
     ctrl, repo, conn, _ = setup
-    dep = Task(id="dep1", title="Dep", type=TaskType.ONLINE, projeto="forge", deps=[])
-    main = Task(id="main", title="Main", type=TaskType.ONLINE, projeto="forge", deps=[])
+    dep = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
+    main = Task(id="main", title="Main", type=TaskType.AGENT, deps=[])
     repo.create(dep)
     repo.create(main)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Main",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": ["dep1"],
     }))
 
@@ -112,16 +108,15 @@ def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
 def test_remove_last_dep_moves_to_queue(setup, monkeypatch):
     """Remocao da unica dep aberta move task de Bloqueadas para Fila."""
     ctrl, repo, conn, _ = setup
-    dep = Task(id="dep1", title="Dep", type=TaskType.ONLINE, projeto="forge", deps=[])
-    main = Task(id="main", title="Main", type=TaskType.ONLINE, projeto="forge", deps=["dep1"])
+    dep = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
+    main = Task(id="main", title="Main", type=TaskType.AGENT, deps=["dep1"])
     repo.create(dep)
     repo.create(main)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Main",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -141,9 +136,9 @@ def test_remove_last_dep_moves_to_queue(setup, monkeypatch):
 def test_cycle_on_edit_resolved_with_toast(setup, monkeypatch):
     """Edicao introduz ciclo: resolve_cycles aplica substituicao + toast >= 3s."""
     ctrl, repo, conn, _ = setup
-    a = Task(id="a", title="A", type=TaskType.ONLINE, projeto="f", deps=["b"])
-    b = Task(id="b", title="B", type=TaskType.ONLINE, projeto="f", deps=["c"])
-    c = Task(id="c", title="C", type=TaskType.ONLINE, projeto="f", deps=[])
+    a = Task(id="a", title="A", type=TaskType.AGENT, deps=["b"])
+    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["c"])
+    c = Task(id="c", title="C", type=TaskType.AGENT, deps=[])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -162,8 +157,7 @@ def test_cycle_on_edit_resolved_with_toast(setup, monkeypatch):
     monkeypatch.setattr(mod, "ToastWidget", FakeToast)
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "C",
-        "type": TaskType.ONLINE,
-        "projeto": "f",
+        "type": TaskType.AGENT,
         "deps": ["a"],  # C -> A -> B -> C = ciclo
     }))
 
@@ -180,16 +174,15 @@ def test_cycle_on_edit_resolved_with_toast(setup, monkeypatch):
 
 # TID-1-2-005 | covers: US-002#5 | bdd_type: SUCCESS
 def test_change_type_persists_and_updates_card_icon(setup, monkeypatch):
-    """Troca de type via radio persiste e atualiza icone wifi/wifi-off do card."""
+    """Troca de type via radio persiste e atualiza chip AGENT/HUMAN do card."""
     ctrl, repo, conn, _ = setup
-    task = Task(id="t1", title="X", type=TaskType.ONLINE, projeto="f", deps=[])
+    task = Task(id="t1", title="X", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "X",
-        "type": TaskType.OFFLINE,
-        "projeto": "f",
+        "type": TaskType.HUMAN,
         "deps": [],
     }))
 
@@ -197,55 +190,7 @@ def test_change_type_persists_and_updates_card_icon(setup, monkeypatch):
 
     tasks = repo.list_active()
     updated = next(t for t in tasks if t.id == "t1")
-    assert updated.type == TaskType.OFFLINE
+    assert updated.type == TaskType.HUMAN
 
     row = conn.execute("SELECT type FROM tasks WHERE id='t1'").fetchone()
-    assert row["type"] == "offline"
-
-
-# TID-1-2-006 | covers: US-002#6 | bdd_type: SUCCESS
-def test_rename_projeto_emits_projects_changed(setup, monkeypatch, qtbot):
-    """Renomear projeto persiste e dispara projects_changed para ProjectFilter."""
-    ctrl, repo, conn, _ = setup
-    task = Task(id="t1", title="X", type=TaskType.ONLINE, projeto="antigo", deps=[])
-    repo.create(task)
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "X",
-        "type": TaskType.ONLINE,
-        "projeto": "novo",
-        "deps": [],
-    }))
-
-    with qtbot.waitSignal(ctrl.projects_changed, timeout=1000):
-        ctrl.handle_edit(task)
-
-    tasks = repo.list_active()
-    updated = next(t for t in tasks if t.id == "t1")
-    assert updated.projeto == "novo"
-
-
-# TID-1-2-007 | covers: US-002#7 | bdd_type: EDGE
-def test_empty_projeto_normalizes_to_outros(setup, monkeypatch):
-    """Esvaziar campo projeto re-normaliza para 'outros'; card mostra #outros."""
-    ctrl, repo, conn, _ = setup
-    task = Task(id="t1", title="X", type=TaskType.ONLINE, projeto="forge", deps=[])
-    repo.create(task)
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "X",
-        "type": TaskType.ONLINE,
-        "projeto": "outros",
-        "deps": [],
-    }))
-
-    ctrl.handle_edit(task)
-
-    tasks = repo.list_active()
-    updated = next(t for t in tasks if t.id == "t1")
-    assert updated.projeto == "outros"
-
-    row = conn.execute("SELECT projeto FROM tasks WHERE id='t1'").fetchone()
-    assert row["projeto"] == "outros"
+    assert row["type"] == "human"

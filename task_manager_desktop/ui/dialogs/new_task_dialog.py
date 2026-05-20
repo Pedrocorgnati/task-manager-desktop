@@ -49,16 +49,16 @@ class NewTaskDialog(QDialog):
         return self.form.title_input
 
     @property
-    def radio_online(self):
-        return self.form.radio_online
+    def radio_agent(self):
+        return self.form.radio_agent
 
     @property
-    def radio_offline(self):
-        return self.form.radio_offline
+    def radio_dev(self):
+        return self.form.radio_dev
 
     @property
-    def project_edit(self):
-        return self.form.projeto_input
+    def radio_human(self):
+        return self.form.radio_human
 
     @property
     def deps_edit(self):

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
-from typing import Final
 
 
 class Status(str, Enum):
@@ -12,8 +11,9 @@ class Status(str, Enum):
 
 
 class TaskType(str, Enum):
-    ONLINE = "online"
-    OFFLINE = "offline"
+    AGENT = "agent"
+    DEV = "dev"
+    HUMAN = "human"
 
 
 class Sector(IntEnum):
@@ -39,17 +39,8 @@ class Color(str, Enum):
     NEUTRAL = "neutral"
 
 
-PROJETO_DEFAULT: Final[str] = "outros"
-
-
 def parse_deps(s: str) -> list[str]:
     return [p.strip() for p in s.split(",") if p.strip()]
-
-
-def normalize_projeto(value: str | None) -> str:
-    if value is None or not value.strip():
-        return PROJETO_DEFAULT
-    return value
 
 
 @dataclass
@@ -57,8 +48,7 @@ class Task:
     id: str
     title: str
     status: Status = Status.PENDING
-    type: TaskType = TaskType.ONLINE
-    projeto: str = PROJETO_DEFAULT
+    type: TaskType = TaskType.AGENT
     deps: list[str] = field(default_factory=list)
     notes: str = ""
     order_index: int = 0
@@ -67,13 +57,24 @@ class Task:
     hidden_at: str | None = None
 
 
+@dataclass
+class Subtask:
+    id: str
+    task_id: str
+    text: str
+    done: bool = False
+    color: str = "#FBBF24"
+    order_index: int = 0
+    state: int = 0
+    notes: str = ""
+
+
 __all__ = [
     "Color",
-    "PROJETO_DEFAULT",
     "Sector",
     "Status",
+    "Subtask",
     "Task",
     "TaskType",
-    "normalize_projeto",
     "parse_deps",
 ]

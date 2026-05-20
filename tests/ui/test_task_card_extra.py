@@ -22,8 +22,7 @@ def _make_task(**kwargs) -> Task:
         id="abc",
         title="Test",
         status=Status.PENDING,
-        type=TaskType.ONLINE,
-        projeto="forge",
+        type=TaskType.AGENT,
         deps=[],
     )
     defaults.update(kwargs)
@@ -149,16 +148,17 @@ def test_show_context_menu_dismissed_returns_none(qtbot, calls_and_cbs, fake_men
 
 def test_update_task_changes_id_title_type_icon(qtbot, calls_and_cbs):
     _, cbs = calls_and_cbs
-    task = _make_task(id="abc", title="Old", type=TaskType.ONLINE, deps=[])
+    task = _make_task(id="abc", title="Old", type=TaskType.AGENT, deps=[])
     card = TaskCard(task, cbs, [task])
     qtbot.addWidget(card)
 
-    new = _make_task(id="xyz", title="New", type=TaskType.OFFLINE, deps=[])
+    new = _make_task(id="xyz", title="New", type=TaskType.HUMAN, deps=[])
     card.update_task(new, [new])
 
     assert card._id_label.text() == "xyz"
     assert card._title_label.text() == "New"
-    assert card._type_icon.toolTip() == "offline"
+    assert not card._type_icon.pixmap().isNull()
+    assert card._type_icon.toolTip() == "human"
     assert card._deps_label.isHidden()
 
 

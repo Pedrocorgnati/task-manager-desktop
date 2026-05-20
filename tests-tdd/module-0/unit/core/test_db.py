@@ -19,11 +19,11 @@ def mem():
 class TestSchemaV1Tabela:
     """TID-0-1-001 | covers: TASK-1/ST002 BDD#1 | suite: unit"""
 
-    def test_schema_v1_cria_tabela_tasks_com_11_colunas(self, mem):
+    def test_schema_v1_cria_tabela_tasks_com_10_colunas(self, mem):
         run_migrations(mem)
         cols = {row[1] for row in mem.execute("PRAGMA table_info(tasks)")}
         expected = {
-            "id", "title", "status", "type", "projeto", "deps", "notes",
+            "id", "title", "status", "type", "deps", "notes",
             "order_index", "created_at", "completed_at", "hidden_at",
         }
         assert cols == expected
@@ -32,7 +32,7 @@ class TestSchemaV1Tabela:
 class TestSchemaV1Indices:
     """TID-0-1-002 | covers: TASK-1/ST002 BDD#1 | suite: unit"""
 
-    def test_schema_v1_cria_4_indices_canonicos(self, mem):
+    def test_schema_v1_cria_3_indices_canonicos(self, mem):
         run_migrations(mem)
         indices = {
             row[0] for row in mem.execute(
@@ -40,7 +40,7 @@ class TestSchemaV1Indices:
                 " AND name NOT LIKE 'sqlite_autoindex_%'"
             )
         }
-        assert indices == {"idx_status", "idx_completed_at", "idx_hidden_at", "idx_projeto"}
+        assert indices == {"idx_status", "idx_completed_at", "idx_hidden_at"}
 
 
 class TestSchemaVersionRow:
@@ -61,7 +61,7 @@ class TestRunMigracoesIdempotente:
         run_migrations(mem)
         run_migrations(mem)
         count = mem.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-        assert count == 1
+        assert count == 6
 
 
 class TestCheckConstraintStatus:
@@ -87,10 +87,9 @@ class TestCheckConstraintType:
 class TestInsertDefaults:
     """TID-0-1-007 | covers: TASK-1/ST002 BDD#5 | suite: unit"""
 
-    def test_insert_sem_projeto_type_aplica_defaults_outros_online(self, mem):
+    def test_insert_sem_type_aplica_default_agent(self, mem):
         run_migrations(mem)
         mem.execute("INSERT INTO tasks (id, title, status) VALUES ('x', 'T', 'pending')")
         mem.commit()
-        row = mem.execute("SELECT projeto, type FROM tasks WHERE id='x'").fetchone()
-        assert row["projeto"] == "outros"
-        assert row["type"] == "online"
+        row = mem.execute("SELECT type FROM tasks WHERE id='x'").fetchone()
+        assert row["type"] == "agent"

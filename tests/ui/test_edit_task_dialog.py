@@ -14,8 +14,7 @@ def sample_task():
         id="abc",
         title="X",
         status=Status.PENDING,
-        type=TaskType.OFFLINE,
-        projeto="systemforge",
+        type=TaskType.HUMAN,
         deps=["a1b", "c2d"],
     )
 
@@ -24,9 +23,8 @@ def test_dialog_prefills_all_fields(qtbot, sample_task):
     dlg = EditTaskDialog(sample_task)
     qtbot.addWidget(dlg)
     assert dlg.form.title_input.text() == "X"
-    assert dlg.form.radio_offline.isChecked() is True
-    assert dlg.form.radio_online.isChecked() is False
-    assert dlg.form.projeto_input.text() == "systemforge"
+    assert dlg.form.radio_human.isChecked() is True
+    assert dlg.form.radio_agent.isChecked() is False
     assert dlg.form.deps_input.text() == "a1b, c2d"
 
 
@@ -50,19 +48,10 @@ def test_empty_title_blocks_save(qtbot, sample_task):
 def test_toggle_radio_updates_get_data(qtbot, sample_task):
     dlg = EditTaskDialog(sample_task)
     qtbot.addWidget(dlg)
-    dlg.form.radio_online.setChecked(True)
+    dlg.form.radio_agent.setChecked(True)
     ok_btn = dlg.button_box.button(QDialogButtonBox.StandardButton.Ok)
     qtbot.mouseClick(ok_btn, Qt.MouseButton.LeftButton)
-    assert dlg.get_data()["type"] == TaskType.ONLINE
-
-
-def test_empty_projeto_normalizes_to_outros(qtbot, sample_task):
-    dlg = EditTaskDialog(sample_task)
-    qtbot.addWidget(dlg)
-    dlg.form.projeto_input.clear()
-    ok_btn = dlg.button_box.button(QDialogButtonBox.StandardButton.Ok)
-    qtbot.mouseClick(ok_btn, Qt.MouseButton.LeftButton)
-    assert dlg.get_data()["projeto"] == "outros"
+    assert dlg.get_data()["type"] == TaskType.AGENT
 
 
 def test_enter_in_title_submits(qtbot, sample_task):
@@ -94,7 +83,6 @@ def test_get_data_returns_all_fields(qtbot, sample_task):
     data = dlg.get_data()
     assert "title" in data
     assert "type" in data
-    assert "projeto" in data
     assert "deps" in data
 
 

@@ -12,8 +12,7 @@ def _make_task(task_id: str = "t1", notes: str = "# Nota") -> Task:
         id=task_id,
         title=f"Task {task_id}",
         status=Status.PENDING,
-        type=TaskType.ONLINE,
-        projeto="outros",
+        type=TaskType.AGENT,
         deps=[],
         notes=notes,
         order_index=0,
@@ -123,4 +122,18 @@ def test_editing_changed_emitted_false_on_cancel(qtbot, pane, sample_task):
     pane.editing_changed.connect(signals.append)
     pane.toolbar.cancel_requested.emit()
     assert signals == [False]
+    pane.hide()
+
+
+def test_reader_theme_toggle_changes_editor_palette(qtbot, pane, sample_task):
+    pane.show()
+    pane.set_task(sample_task)
+    assert pane.reader_light_mode() is False
+    pane.toolbar.btn_reader_theme.click()
+    assert pane.reader_light_mode() is True
+    assert pane.editor.palette().base().color().name().lower() == "#fafaf7"
+    assert pane.editor.palette().text().color().name().lower() == "#111116"
+    pane.toolbar.btn_reader_theme.click()
+    assert pane.reader_light_mode() is False
+    assert pane.editor.palette().base().color().name().lower() == "#0d0e12"
     pane.hide()

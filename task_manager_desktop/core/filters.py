@@ -1,34 +1,38 @@
 from __future__ import annotations
 
-from task_manager_desktop.core.models import Task
+from collections.abc import Iterable
 
-ALL_PROJECTS_SENTINEL = "__all__"
+from task_manager_desktop.core.models import Task, TaskType
+
+ALL_TASK_TYPES: frozenset[str] = frozenset(t.value for t in TaskType)
 
 
-def matches(task: Task, query: str | None, projeto: str | None) -> bool:
-    if projeto and projeto != ALL_PROJECTS_SENTINEL:
-        # CL-052: case-insensitive intencional — coerente com CL-122 (busca). Todos os projetos
-        # passam por normalize_projeto antes de persistir; casefold aqui so afeta projetos criados
-        # com letras maiusculas. Decisao registrada em INTAKE-CHECKLIST.md.
-        if (task.projeto or "").casefold() != projeto.casefold():
-            return False
+def _normalize_type_filter(task_types: Iterable[str | TaskType] | None) -> frozenset[str]:
+    if task_types is None:
+        return ALL_TASK_TYPES
+    return frozenset(
+        item.value if isinstance(item, TaskType) else str(item)
+        for item in task_types
+    )
 
-    if query:
-        needle = query.strip().casefold()
-        if needle:
-            haystack = f"{task.title or ''}\n{task.notes or ''}".casefold()
-            if needle not in haystack:
-                return False
+
+def matches(
+    task: Task,
+    task_types: Iterable[str | TaskType] | None = None,
+) -> bool:
+    allowed_types = _normalize_type_filter(task_types)
+    if task.type.value not in allowed_types:
+        return False
 
     return True
 
 
-def is_active(query: str | None, projeto: str | None) -> bool:
-    if query and query.strip():
-        return True
-    if projeto and projeto != ALL_PROJECTS_SENTINEL:
+def is_active(
+    task_types: Iterable[str | TaskType] | None = None,
+) -> bool:
+    if _normalize_type_filter(task_types) != ALL_TASK_TYPES:
         return True
     return False
 
 
-__all__ = ["ALL_PROJECTS_SENTINEL", "matches", "is_active"]
+__all__ = ["ALL_TASK_TYPES", "matches", "is_active"]

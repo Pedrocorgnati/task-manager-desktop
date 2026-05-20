@@ -34,15 +34,14 @@ def _make_task(id: str = "abc", title: str = "T", **kw) -> Task:
 
 # TID-1-1-017 | covers: TASK-1/ST003 insert
 def test_insert_uses_bind_params_and_persists_all_fields(repo, conn):
-    """TaskRepository.insert usa bind ? e persiste todos os campos (id,title,type,projeto,deps,timestamps)."""
-    task = _make_task(id="abc", title="X", type=TaskType.OFFLINE, projeto="systemforge", deps=["dep1"])
+    """TaskRepository.insert usa bind ? e persiste todos os campos (id,title,type,deps,timestamps)."""
+    task = _make_task(id="abc", title="X", type=TaskType.HUMAN, deps=["dep1"])
     repo.create(task)
 
     row = conn.execute("SELECT * FROM tasks WHERE id='abc'").fetchone()
     assert row is not None
     assert row["title"] == "X"
-    assert row["type"] == "offline"
-    assert row["projeto"] == "systemforge"
+    assert row["type"] == "human"
     assert row["deps"] == "dep1"
 
 
@@ -68,15 +67,14 @@ def test_exists_returns_true_when_present_false_otherwise(repo):
 
 
 # TID-1-2-019 | covers: TASK-2/ST003 update
-def test_update_applies_four_fields_via_bind_where_id(repo, conn):
-    """TaskRepository.update aplica UPDATE com 4 campos (title,type,projeto,deps) via bind ? WHERE id=?."""
-    repo.create(_make_task(id="u", title="orig", type=TaskType.ONLINE, projeto="outros"))
-    repo.update("u", title="updated", type=TaskType.OFFLINE, projeto="sf", deps=["a", "b"])
+def test_update_applies_three_fields_via_bind_where_id(repo, conn):
+    """TaskRepository.update aplica UPDATE com 3 campos (title,type,deps) via bind ? WHERE id=?."""
+    repo.create(_make_task(id="u", title="orig", type=TaskType.AGENT))
+    repo.update("u", title="updated", type=TaskType.HUMAN, deps=["a", "b"])
 
     row = conn.execute("SELECT * FROM tasks WHERE id='u'").fetchone()
     assert row["title"] == "updated"
-    assert row["type"] == "offline"
-    assert row["projeto"] == "sf"
+    assert row["type"] == "human"
     assert row["deps"] == "a,b"
 
 
@@ -135,21 +133,6 @@ def test_restore_sets_hidden_at_to_null(repo, conn):
 
     row = conn.execute("SELECT hidden_at FROM tasks WHERE id='r'").fetchone()
     assert row["hidden_at"] is None
-
-
-# TID-1-3-015 | covers: TASK-3/ST001 list_projetos
-def test_list_projetos_distinct_excludes_hidden_orders_case_insensitive(repo, conn):
-    """TaskRepository.list_projetos: DISTINCT, exclui hidden, ORDER BY LOWER(projeto) (case-insensitive)."""
-    repo.create(_make_task(id="1", title="t1", projeto="Zeta"))
-    repo.create(_make_task(id="2", title="t2", projeto="alpha"))
-    repo.create(_make_task(id="3", title="t3", projeto="beta"))
-    repo.create(_make_task(id="4", title="t4", projeto="Hidden"))
-    conn.execute("UPDATE tasks SET hidden_at='2026-01-01T00:00:00Z' WHERE id='4'")
-    conn.commit()
-
-    projetos = repo.list_projetos()
-    assert "Hidden" not in projetos
-    assert projetos == sorted(projetos, key=str.lower)
 
 
 # TID-1-3-016 | covers: TASK-3/ST001 init

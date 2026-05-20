@@ -55,7 +55,7 @@ def ctrl(repo, mock_task_list, mock_main_window):
 def _task(id: str, title: str = "T", status: Status = Status.PENDING,
           deps: list[str] | None = None) -> Task:
     return Task(id=id, title=title, status=status,
-                type=TaskType.ONLINE, projeto="outros", deps=deps or [])
+                type=TaskType.AGENT, deps=deps or [])
 
 
 # ── US-004: mudança de status ─────────────────────────────────────────────────

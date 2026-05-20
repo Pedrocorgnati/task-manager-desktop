@@ -17,13 +17,13 @@ from typing import Any
 
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit
+from PySide6.QtWidgets import QApplication, QCheckBox
 
 from task_manager_desktop.core.db import run_migrations
 from task_manager_desktop.core.models import Status, Task, TaskType
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.header import HeaderBar
-from task_manager_desktop.ui.task_list import ALL_PROJECTS_SENTINEL, TaskList
+from task_manager_desktop.ui.task_list import TaskList
 
 
 # ----------------------------------------------------------------------
@@ -42,17 +42,16 @@ def _mk(
     *,
     tid: str,
     title: str,
-    projeto: str = "alpha",
     notes: str = "",
     order_index: int = 1,
     status: Status = Status.PENDING,
+    task_type: TaskType = TaskType.HUMAN,
 ) -> Task:
     t = Task(
         id=tid,
         title=title,
         status=status,
-        type=TaskType.OFFLINE,
-        projeto=projeto,
+        type=task_type,
         deps=[],
         notes=notes,
         order_index=order_index,
@@ -135,64 +134,61 @@ def test_gap005_delete_with_selection_invokes_hard_delete(qtbot, repo):
 
 def test_gap006_filter_preserved_after_refresh_simulating_create(qtbot, repo):
     """US-021 c1: após criar nova task, filtro corrente continua aplicado."""
-    _mk(repo, tid="t1", title="refator header", projeto="alpha")
-    _mk(repo, tid="t2", title="docs guia", projeto="alpha", order_index=2)
+    _mk(repo, tid="t1", title="human task", task_type=TaskType.HUMAN)
+    _mk(repo, tid="t2", title="dev task", task_type=TaskType.DEV, order_index=2)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.apply_filter("refator", None)
-    assert tl._query == "refator"
-    assert tl._projeto == ALL_PROJECTS_SENTINEL
+    tl.apply_filter(task_types={"human"})
+    assert tl._task_types == frozenset({"human"})
 
     # simulate "create new task" path: append + refresh from repo
-    _mk(repo, tid="t3", title="bug fix", projeto="alpha", order_index=3)
+    _mk(repo, tid="t3", title="agent task", task_type=TaskType.AGENT, order_index=3)
     tl.refresh(repo.list_active())
 
-    assert tl._query == "refator", "query deve persistir após refresh"
+    assert tl._task_types == frozenset({"human"}), "type filter deve persistir após refresh"
     assert "t1" in tl.visible_task_ids()
     assert "t2" not in tl.visible_task_ids()
     assert "t3" not in tl.visible_task_ids()
 
 
 def test_gap006_filter_preserved_after_refresh_simulating_edit(qtbot, repo):
-    """US-021 c2: após editar uma task, filtro projeto+texto persiste."""
-    _mk(repo, tid="t1", title="refator login", projeto="alpha")
-    _mk(repo, tid="t2", title="refator header", projeto="beta", order_index=2)
+    """US-021 c2: após editar uma task, filtro de tipo persiste."""
+    _mk(repo, tid="t1", title="human alpha", task_type=TaskType.HUMAN)
+    _mk(repo, tid="t2", title="dev beta", task_type=TaskType.DEV, order_index=2)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.apply_filter("refator", "alpha")
-    assert tl._query == "refator"
-    assert tl._projeto == "alpha"
+    tl.apply_filter(task_types={"human"})
+    assert tl._task_types == frozenset({"human"})
     assert tl.visible_task_ids() == ["t1"]
 
     # simulate "edit task" path: re-fetch list (in real flow, repo state may change)
     tl.refresh(repo.list_active())
-    assert tl._query == "refator"
-    assert tl._projeto == "alpha"
+    assert tl._task_types == frozenset({"human"})
     assert tl.visible_task_ids() == ["t1"]
 
 
 def test_gap006_filter_preserved_after_refresh_simulating_delete(qtbot, repo):
     """US-021 c3: após deletar uma task, filtro corrente continua aplicado."""
-    t1 = _mk(repo, tid="t1", title="refator")
-    _mk(repo, tid="t2", title="docs", order_index=2)
+    t1 = _mk(repo, tid="t1", title="human", task_type=TaskType.HUMAN)
+    _mk(repo, tid="t2", title="dev", task_type=TaskType.DEV, order_index=2)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.apply_filter("refator", None)
+    tl.apply_filter(task_types={"human"})
     assert tl.visible_task_ids() == ["t1"]
 
     repo.delete(t1.id)
     tl.refresh(repo.list_active())
 
-    assert tl._query == "refator", "query deve persistir após delete"
+    assert tl._task_types == frozenset({"human"}), "type filter deve persistir após delete"
     assert tl.visible_task_ids() == []
 
 
@@ -205,15 +201,13 @@ def _build_esc_handler(
     *,
     modal_active: Callable[[], Any],
     modal_close: Callable[[], None],
-    search_has_focus: Callable[[], bool],
-    clear_search_focus: Callable[[], None],
     list_has_selection: Callable[[], bool],
     clear_selection: Callable[[], None],
 ) -> Callable[[], str]:
     """Mirror of app.py:_esc_handler with explicit hooks for testing.
 
     Returns a function that fires the handler and returns a label of which level
-    actually executed: "modal" | "search" | "deselect" | "noop".
+    actually executed: "modal" | "deselect" | "noop".
     """
 
     def _fire() -> str:
@@ -221,9 +215,6 @@ def _build_esc_handler(
         if modal is not None:
             modal_close()
             return "modal"
-        if search_has_focus():
-            clear_search_focus()
-            return "search"
         if list_has_selection():
             clear_selection()
             return "deselect"
@@ -233,13 +224,11 @@ def _build_esc_handler(
 
 
 def test_gap007_esc_level1_modal_closes_first():
-    """US-022 c1: modal aberto fecha primeiro mesmo com search focado e selecao."""
+    """US-022 c1: modal aberto fecha primeiro mesmo com seleção."""
     state = {"modal": object(), "closed": False}
     handler = _build_esc_handler(
         modal_active=lambda: state["modal"],
         modal_close=lambda: state.update(closed=True),
-        search_has_focus=lambda: True,  # cenário pior caso
-        clear_search_focus=lambda: pytest.fail("não deve tocar search"),
         list_has_selection=lambda: True,
         clear_selection=lambda: pytest.fail("não deve tocar selection"),
     )
@@ -247,29 +236,12 @@ def test_gap007_esc_level1_modal_closes_first():
     assert state["closed"] is True
 
 
-def test_gap007_esc_level2_search_unfocus_when_no_modal():
-    """US-022 c2: sem modal, Esc desfoca o campo de busca."""
-    state = {"search_focused": True, "unfocused": False}
-    handler = _build_esc_handler(
-        modal_active=lambda: None,
-        modal_close=lambda: pytest.fail("não há modal"),
-        search_has_focus=lambda: state["search_focused"],
-        clear_search_focus=lambda: state.update(unfocused=True),
-        list_has_selection=lambda: True,
-        clear_selection=lambda: pytest.fail("não deve tocar selection"),
-    )
-    assert handler() == "search"
-    assert state["unfocused"] is True
-
-
-def test_gap007_esc_level3_clear_selection_when_no_modal_no_search():
-    """US-022 c3: sem modal e sem search focado, Esc desseleciona a task."""
+def test_gap007_esc_level3_clear_selection_when_no_modal():
+    """US-022 c3: sem modal, Esc desseleciona a task."""
     state = {"deselected": False}
     handler = _build_esc_handler(
         modal_active=lambda: None,
         modal_close=lambda: pytest.fail("não há modal"),
-        search_has_focus=lambda: False,
-        clear_search_focus=lambda: pytest.fail("search nao focado"),
         list_has_selection=lambda: True,
         clear_selection=lambda: state.update(deselected=True),
     )
@@ -278,12 +250,10 @@ def test_gap007_esc_level3_clear_selection_when_no_modal_no_search():
 
 
 def test_gap007_esc_level4_noop_when_nothing_to_do():
-    """US-022 c4: sem modal, sem search focado, sem seleção → no-op silencioso."""
+    """US-022 c4: sem modal, sem seleção → no-op silencioso."""
     handler = _build_esc_handler(
         modal_active=lambda: None,
         modal_close=lambda: pytest.fail("não há modal"),
-        search_has_focus=lambda: False,
-        clear_search_focus=lambda: pytest.fail("search nao focado"),
         list_has_selection=lambda: False,
         clear_selection=lambda: pytest.fail("sem selecao"),
     )
@@ -296,12 +266,11 @@ def test_gap007_esc_level4_noop_when_nothing_to_do():
 
 
 def test_gap008_uxdef_accessible_names_present(qtbot):
-    """US-023 c1: HeaderBar + search + project_filter expõem accessibleName em pt-BR."""
+    """US-023 c1: HeaderBar + type_filter expõem accessibleName em pt-BR."""
     bar = HeaderBar()
     qtbot.addWidget(bar)
     assert bar.accessibleName() == "Barra de cabeçalho"
-    assert bar._search.accessibleName() == "Campo de busca por título ou notas"
-    assert bar._project_filter.accessibleName() == "Filtro por projeto"
+    assert bar._type_filter.accessibleName() == "Filtro por tipo de task"
 
 
 def test_gap008_uxdef_tooltip_on_primary_actions(qtbot):
@@ -309,47 +278,39 @@ def test_gap008_uxdef_tooltip_on_primary_actions(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
     assert bar.btn_new.toolTip() == "Nova task (Ctrl+N)"
-    # Clear done button: disabled shows "Nenhuma", enabled has no tooltip (label is self-explanatory)
+    # Clear done button is icon-only: disabled and enabled states both need tooltip.
     bar.set_clear_done_enabled(False)
     assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
     bar.set_clear_done_enabled(True)
-    assert bar._btn_clear_done.toolTip() == ""
+    assert bar._btn_clear_done.toolTip() == "Mover tasks concluídas para a Lixeira"
     assert bar._btn_trash.toolTip() == "Lixeira (tasks ocultas até 30 dias)"
-    assert "Ctrl+F" in bar._search.placeholderText(), (
-        "Placeholder do search deve documentar o atalho Ctrl+F (UX-DEF)."
-    )
 
 
-def test_gap008_uxdef_search_widget_is_qlineedit_with_clear_button(qtbot):
-    """US-023 c3: search é QLineEdit acessível com clear button habilitado."""
+def test_gap008_uxdef_type_filter_widgets_are_checkboxes(qtbot):
+    """US-023 c3: filtro de tipo usa checkboxes acessíveis."""
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    assert isinstance(bar._search, QLineEdit)
-    assert bar._search.isClearButtonEnabled() is True
+    assert set(bar._type_checkboxes) == {"human", "dev", "agent"}
+    assert all(isinstance(cb, QCheckBox) for cb in bar._type_checkboxes.values())
+    assert bar.current_task_types() == frozenset({"human", "dev", "agent"})
 
 
-def test_gap008_uxdef_tab_order_search_then_project_filter(qtbot):
-    """US-023 c4: na cadeia de focus, search é alcançável e o ProjectFilter
-    aparece depois dele (ordem natural de inserção no layout L→R).
+def test_gap008_uxdef_type_filter_in_focus_chain(qtbot):
+    """US-023 c4: na cadeia de focus, os checkboxes do type filter sao alcancaveis.
 
     Verificamos via nextInFocusChain() — funciona sem window manager (headless).
     """
     bar = HeaderBar()
     qtbot.addWidget(bar)
 
-    # Coletar a focus chain a partir do search e procurar pelo combo.
+    # Coletar a focus chain a partir do primeiro checkbox.
     seen = []
-    cur = bar._search
+    cur = bar._type_checkboxes["human"]
     for _ in range(200):  # bound para evitar loop infinito.
         seen.append(cur)
         cur = cur.nextInFocusChain()
-        if cur is bar._search:
+        if cur is bar._type_checkboxes["human"]:
             break
 
-    combo = bar._project_filter
-    idx_search = seen.index(bar._search)
-    assert combo in seen, "ProjectFilter precisa estar na cadeia de focus do HeaderBar."
-    idx_combo = seen.index(combo)
-    assert idx_combo > idx_search, (
-        "Tab order deve ir do search para o ProjectFilter (combo aparece depois na chain)."
-    )
+    for cb in bar._type_checkboxes.values():
+        assert cb in seen, "Todos os checkboxes de tipo devem estar na cadeia de focus."

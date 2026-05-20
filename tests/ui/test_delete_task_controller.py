@@ -11,7 +11,7 @@ from task_manager_desktop.core.models import Status, Task, TaskType
 
 @pytest.fixture
 def task():
-    return Task(id="abc", title="Tarefa ABC", status=Status.PENDING, type=TaskType.ONLINE)
+    return Task(id="abc", title="Tarefa ABC", status=Status.PENDING, type=TaskType.AGENT)
 
 
 @pytest.fixture

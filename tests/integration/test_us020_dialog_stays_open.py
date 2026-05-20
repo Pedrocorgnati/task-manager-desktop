@@ -71,7 +71,7 @@ def test_edit_dialog_stays_open_on_io_error(_setup, monkeypatch, qtbot):
     """US-020 c3: EditTaskDialog permanece aberto + Salvar reabilitado quando repo.update levanta sqlite3.Error."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", type=TaskType.ONLINE, projeto="forge", deps=[])
+    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod

@@ -29,9 +29,8 @@ def sample_hidden_task():
         status=Status.DONE,
         hidden_at=datetime.now().isoformat(),
         completed_at=datetime.now().isoformat(),
-        projeto="outros",
         notes="",
-        type="online",
+        type="agent",
         deps=[],
     )
 
@@ -47,9 +46,8 @@ def sample_hidden_tasks():
             status=Status.DONE,
             hidden_at=(now - timedelta(days=29)).isoformat(),
             completed_at=(now - timedelta(days=29)).isoformat(),
-            projeto="outros",
             notes="",
-            type="online",
+            type="agent",
             deps=[],
         ),
         Task(
@@ -58,9 +56,8 @@ def sample_hidden_tasks():
             status=Status.DONE,
             hidden_at=(now - timedelta(days=2)).isoformat(),
             completed_at=(now - timedelta(days=2)).isoformat(),
-            projeto="outros",
             notes="",
-            type="online",
+            type="agent",
             deps=[],
         ),
         Task(
@@ -69,9 +66,8 @@ def sample_hidden_tasks():
             status=Status.DONE,
             hidden_at=(now - timedelta(hours=1)).isoformat(),
             completed_at=(now - timedelta(hours=1)).isoformat(),
-            projeto="Project A",
             notes="",
-            type="offline",
+            type="human",
             deps=[],
         ),
     ]
@@ -213,9 +209,8 @@ class TestTrashDialogEdgeCases:
             status=Status.DONE,
             hidden_at=(now - timedelta(days=30)).isoformat(),
             completed_at=(now - timedelta(days=30)).isoformat(),
-            projeto="outros",
             notes="",
-            type="online",
+            type="agent",
             deps=[],
         )
         mock_repo.list_trash.return_value = [task_at_30_days]
@@ -233,9 +228,8 @@ class TestTrashDialogEdgeCases:
             status=Status.DONE,
             hidden_at=datetime.now().isoformat(),
             completed_at=datetime.now().isoformat(),
-            projeto="outros",
             notes="",
-            type="online",
+            type="agent",
             deps=[],
         )
         mock_repo.list_trash.return_value = [task]
@@ -261,9 +255,8 @@ class TestTrashDialogEdgeCases:
             status=Status.DONE,
             hidden_at=datetime.now().isoformat(),
             completed_at=datetime.now().isoformat(),
-            projeto="outros",
             notes="",
-            type="online",
+            type="agent",
             deps=[],
         )
         mock_repo.list_trash.return_value = [task]

@@ -34,8 +34,7 @@ def test_create_persists_all_fields(repo, conn):
     task = _task(
         id="abc",
         title="Tarefa X",
-        type=TaskType.OFFLINE,
-        projeto="forge",
+        type=TaskType.HUMAN,
         deps=["d1", "d2"],
         notes="nota",
     )
@@ -44,8 +43,7 @@ def test_create_persists_all_fields(repo, conn):
     row = conn.execute("SELECT * FROM tasks WHERE id='abc'").fetchone()
     assert row is not None
     assert row["title"] == "Tarefa X"
-    assert row["type"] == "offline"
-    assert row["projeto"] == "forge"
+    assert row["type"] == "human"
     assert row["deps"] == "d1,d2"
     assert row["notes"] == "nota"
 
@@ -82,16 +80,9 @@ def test_update_status_enum_stored_as_value(repo, conn):
 
 def test_update_type_enum_stored_as_value(repo, conn):
     repo.create(_task(id="u", title="t"))
-    repo.update("u", type=TaskType.OFFLINE)
+    repo.update("u", type=TaskType.HUMAN)
     row = conn.execute("SELECT type FROM tasks WHERE id='u'").fetchone()
-    assert row["type"] == "offline"
-
-
-def test_update_projeto_normalizes(repo, conn):
-    repo.create(_task(id="u", title="t"))
-    repo.update("u", projeto="  ")
-    row = conn.execute("SELECT projeto FROM tasks WHERE id='u'").fetchone()
-    assert row["projeto"] == "outros"
+    assert row["type"] == "human"
 
 
 def test_update_ignores_unknown_keys(repo, conn):
@@ -224,40 +215,6 @@ def test_restore_makes_task_appear_in_list_active(repo):
     repo.restore("r")
     ids = [t.id for t in repo.list_active()]
     assert "r" in ids
-
-
-# ── list_projetos ─────────────────────────────────────────────────────────────
-
-
-def test_list_projetos_empty_db_returns_empty_list(repo):
-    assert repo.list_projetos() == []
-
-
-def test_list_projetos_distinct_values(repo):
-    repo.create(_task(id="1", title="t1", projeto="alpha"))
-    repo.create(_task(id="2", title="t2", projeto="alpha"))
-    repo.create(_task(id="3", title="t3", projeto="beta"))
-    result = repo.list_projetos()
-    assert result.count("alpha") == 1
-    assert "beta" in result
-
-
-def test_list_projetos_excludes_hidden(repo, conn):
-    repo.create(_task(id="1", title="t1", projeto="visible"))
-    repo.create(_task(id="2", title="t2", projeto="secret"))
-    conn.execute("UPDATE tasks SET hidden_at='2026-01-01T00:00:00Z' WHERE id='2'")
-    conn.commit()
-    result = repo.list_projetos()
-    assert "secret" not in result
-    assert "visible" in result
-
-
-def test_list_projetos_ordered_case_insensitive(repo):
-    repo.create(_task(id="1", title="t1", projeto="Zeta"))
-    repo.create(_task(id="2", title="t2", projeto="alpha"))
-    repo.create(_task(id="3", title="t3", projeto="Beta"))
-    result = repo.list_projetos()
-    assert result == sorted(result, key=str.lower)
 
 
 # ── exists ────────────────────────────────────────────────────────────────────

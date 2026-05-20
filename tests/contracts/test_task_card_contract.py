@@ -21,7 +21,7 @@ def test_task_card_constructor_accepts_task_callbacks_all_tasks(qtbot):
     assert "all_tasks" in params
 
     # Verify a real instance can be created with the required callback dict
-    task = Task(id="x", title="T", status=Status.PENDING, type=TaskType.ONLINE, projeto="f", deps=[])
+    task = Task(id="x", title="T", status=Status.PENDING, type=TaskType.AGENT, deps=[])
     received = {}
     callbacks = {
         "on_edit": lambda t: received.update({"edit": t.id}),

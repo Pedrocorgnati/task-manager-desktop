@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QDrag, QDropEvent, QImage, QPainter, QPixmap
+from PySide6.QtGui import (
+    QColor,
+    QDrag,
+    QDragEnterEvent,
+    QDragMoveEvent,
+    QDropEvent,
+    QImage,
+    QPainter,
+    QPixmap,
+    QResizeEvent,
+)
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
@@ -16,10 +27,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from task_manager_desktop.core.filters import ALL_PROJECTS_SENTINEL, is_active, matches
-from task_manager_desktop.core.models import Sector, Task
+from task_manager_desktop.core.filters import ALL_TASK_TYPES, is_active, matches
+from task_manager_desktop.core.models import Sector, Task, TaskType
 from task_manager_desktop.core.sector import compute_sector, count_open_deps
-from task_manager_desktop.ui.theme import PALETTE
+from task_manager_desktop.ui.theme import PALETTE, SPLITTER_SIZES
 
 if TYPE_CHECKING:
     from task_manager_desktop.repositories.task_repository import TaskRepository
@@ -62,7 +73,9 @@ class _InnerList(QListWidget):
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setObjectName("taskListWidget")
-        self.setSpacing(3)
+        self.setProperty("testid", "task-list-widget")
+        # Gap entre cards: 1/3 do valor anterior (3 -> 1).
+        self.setSpacing(1)
 
     # ------------------------------------------------------------------
     # Keyboard navigation — belt-and-suspenders (window shortcuts primary)
@@ -143,48 +156,53 @@ class _InnerList(QListWidget):
         drag.setHotSpot(ghost.rect().center())
         drag.exec(supported_actions)
 
+    # Aceita o drag interno em qualquer ponto do viewport. Sem isto, o
+    # Qt rejeita posicoes "vazias" (gap entre cards, area abaixo do ultimo
+    # card) e o dropEvent nunca chega a ser entregue.
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        super().dragEnterEvent(event)
+        if event.source() is self:
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event: QDragMoveEvent) -> None:
+        super().dragMoveEvent(event)
+        if event.source() is self:
+            event.acceptProposedAction()
+
     def dropEvent(self, event: QDropEvent) -> None:
         source_row = self.currentRow()
         if self._type_at(source_row) != "task":
             event.ignore()
             return
 
-        target_item = self.itemAt(event.position().toPoint())
-        if target_item is None:
-            event.ignore()
-            return
-
-        target_row = self.row(target_item)
-        target_type = self._type_at(target_row)
-
-        if target_type in ("separator", "placeholder"):
-            event.ignore()
-            return
-
         source_sector = self._sector_for_row(source_row)
-        target_sector = self._sector_for_row(target_row)
+        source_id = self._task_id_at(source_row)
 
-        if source_sector != target_sector:
-            event.ignore()
-            return
-
+        # Setor Concluidas e imutavel.
         if source_sector == Sector.DONE.value:
             event.ignore()
             return
 
-        # Snapshot: task ids in sector order before the move
-        orig_ids = [self._task_id_at(r) for r in self._task_rows_in_sector(source_sector)]
+        # O drop sempre resolve para um card, mesmo caindo no gap entre
+        # cards ou abaixo do ultimo: o card arrastado e inserido acima do
+        # card que estava abaixo do ponto de drop.
+        drop_y = event.position().toPoint().y()
 
-        # Apply visual move
-        super().dropEvent(event)
-
-        # Compute new order after move
-        new_ids = [self._task_id_at(r) for r in self._task_rows_in_sector(source_sector)]
-
-        if new_ids == orig_ids:
+        # Drop cross-setor continua no-op silencioso (setor deriva do status).
+        nearest_row = self._nearest_task_row(drop_y)
+        if nearest_row < 0 or self._sector_for_row(nearest_row) != source_sector:
+            event.ignore()
             return
 
-        new_pairs = [(tid, idx + 1) for idx, tid in enumerate(new_ids)]
+        orig_ids = [self._task_id_at(r) for r in self._task_rows_in_sector(source_sector)]
+        ordered_ids = self._reordered_sector_ids(source_sector, source_id, drop_y)
+
+        event.acceptProposedAction()
+
+        if ordered_ids == orig_ids:
+            return  # ordem inalterada: aceita o gesto sem persistir
+
+        new_pairs = [(tid, idx + 1) for idx, tid in enumerate(ordered_ids)]
 
         repo = self._outer._repo
         if repo is None:
@@ -193,7 +211,7 @@ class _InnerList(QListWidget):
         try:
             repo.update_order_indexes(new_pairs)
         except sqlite3.OperationalError as exc:
-            # Revert visual by full rebuild from stored task list
+            # Reverte recarregando a lista do estado anterior em cache.
             self._outer.refresh(self._outer._tasks)
             parent_win = self._outer._main_window
             parent_w = parent_win if isinstance(parent_win, QWidget) else None
@@ -202,12 +220,64 @@ class _InnerList(QListWidget):
             ErrorDialog.show_io_error(parent_w, exc, repo.db_path)
             return
 
+        # Re-renderiza a partir do repo: order_index dita a ordem visual.
+        self._outer.refresh(repo.list_active())
+        self._select_task_row(source_id)
+
         parent_win = self._outer._main_window
         if isinstance(parent_win, QWidget):
             from task_manager_desktop.ui.toast import ToastWidget
 
             toast = ToastWidget(parent_win)
             toast.show_info("Ordem atualizada.")
+
+    def _nearest_task_row(self, y: int) -> int:
+        """Row do item 'task' cuja faixa vertical esta mais proxima de y.
+        Retorna -1 se nao houver tasks. Garante que o drop sempre resolve
+        para um card, mesmo caindo no gap entre eles."""
+        best_row = -1
+        best_dist: int | None = None
+        for r in range(self.count()):
+            if self._type_at(r) != "task":
+                continue
+            rect = self.visualItemRect(self.item(r))
+            if rect.top() <= y <= rect.bottom():
+                return r
+            dist = rect.top() - y if y < rect.top() else y - rect.bottom()
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                best_row = r
+        return best_row
+
+    def _reordered_sector_ids(
+        self, sector_value: int, source_id: str, drop_y: int
+    ) -> list[str]:
+        """Nova ordem de task ids do setor apos soltar source_id em drop_y.
+        O card cai acima do primeiro card cujo centro esta abaixo de drop_y;
+        se drop_y estiver abaixo de todos, vai para o fim do setor."""
+        rows = self._task_rows_in_sector(sector_value)
+        ids = [self._task_id_at(r) for r in rows]
+        if source_id in ids:
+            ids.remove(source_id)
+
+        insert_at = len(ids)
+        for r in rows:
+            tid = self._task_id_at(r)
+            if tid == source_id:
+                continue
+            center_y = self.visualItemRect(self.item(r)).center().y()
+            if drop_y < center_y:
+                insert_at = ids.index(tid)
+                break
+
+        ids.insert(insert_at, source_id)
+        return ids
+
+    def _select_task_row(self, task_id: str) -> None:
+        for r in range(self.count()):
+            if self._type_at(r) == "task" and self._task_id_at(r) == task_id:
+                self.setCurrentRow(r)
+                return
 
 
 class TaskList(QWidget):
@@ -216,38 +286,51 @@ class TaskList(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.setProperty("testid", "task-list-container")
+        self.setFixedWidth(int(SPLITTER_SIZES[0] * 0.9))
         self._callbacks: dict[str, Any] = {}
         self._tasks: list[Task] = []
         self._cards: list[Any] = []
         self._repo: TaskRepository | None = None
         self._main_window: QWidget | None = None
-        self._query: str = ""
-        self._projeto: str = ALL_PROJECTS_SENTINEL
+        self._task_types: frozenset[str] = ALL_TASK_TYPES
+        # Overlay ancorado no canto inferior direito (ver attach_test_mode_grid).
+        self._test_mode_grid: QWidget | None = None
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
+
+        self._header_host = QWidget(self)
+        self._header_host.setObjectName("taskListHeaderHost")
+        self._header_host.setProperty("testid", "task-list-header-host")
+        self._header_layout = QHBoxLayout(self._header_host)
+        self._header_layout.setContentsMargins(10, 6, 10, 6)
+        self._header_layout.setSpacing(0)
+        self._layout.addWidget(self._header_host)
 
         self._empty_label = QLabel(
             "Sem tasks. Clique em + para criar a primeira.", self
         )
         self._empty_label.setObjectName("emptyStateText")
+        self._empty_label.setProperty("testid", "task-list-empty-state")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_label.setWordWrap(True)
         self._empty_label.hide()
-        layout.addWidget(self._empty_label)
+        self._layout.addWidget(self._empty_label)
 
         self._empty_filter_label = QLabel(
             "Nenhuma task corresponde a este filtro.", self
         )
         self._empty_filter_label.setObjectName("filterEmptyStateText")
+        self._empty_filter_label.setProperty("testid", "task-list-filter-empty-state")
         self._empty_filter_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._empty_filter_label.setWordWrap(True)
         self._empty_filter_label.hide()
-        layout.addWidget(self._empty_filter_label)
+        self._layout.addWidget(self._empty_filter_label)
 
         self._inner = _InnerList(self)
-        layout.addWidget(self._inner)
+        self._layout.addWidget(self._inner)
 
     # ------------------------------------------------------------------
     # Configuration
@@ -261,6 +344,41 @@ class TaskList(QWidget):
 
     def set_main_window(self, main_window: QWidget) -> None:
         self._main_window = main_window
+
+    def set_header_widget(self, widget: QWidget) -> None:
+        while self._header_layout.count():
+            item = self._header_layout.takeAt(0)
+            old = item.widget()
+            if old is not None:
+                old.setParent(None)
+        widget.setParent(self._header_host)
+        self._header_layout.addWidget(widget)
+
+    def attach_test_mode_grid(self, widget: QWidget) -> None:
+        """Ancora a grid de test-mode como overlay flutuante no canto
+        inferior direito desta coluna (coluna 1 / task-list-pane)."""
+        self._test_mode_grid = widget
+        widget.setParent(self)
+        widget.show()
+        widget.raise_()
+        self._reposition_test_mode_grid()
+
+    _TEST_MODE_GRID_MARGIN = 8
+
+    def _reposition_test_mode_grid(self) -> None:
+        grid = self._test_mode_grid
+        if grid is None:
+            return
+        grid.adjustSize()
+        margin = self._TEST_MODE_GRID_MARGIN
+        x = self.width() - grid.width() - margin
+        y = self.height() - grid.height() - margin
+        grid.move(max(0, x), max(0, y))
+        grid.raise_()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._reposition_test_mode_grid()
 
     # ------------------------------------------------------------------
     # Public API
@@ -289,13 +407,22 @@ class TaskList(QWidget):
                 card.pulse()
                 break
 
-    def set_filters(self, query: str | None, projeto: str | None) -> None:
-        self._query = (query or "").strip()
-        self._projeto = projeto or ALL_PROJECTS_SENTINEL
+    def set_filters(
+        self,
+        task_types: Iterable[str | TaskType] | None = None,
+    ) -> None:
+        self._task_types = (
+            ALL_TASK_TYPES
+            if task_types is None
+            else frozenset(t.value if isinstance(t, TaskType) else str(t) for t in task_types)
+        )
         self._rebuild(self._tasks)
 
-    def apply_filter(self, text: str | None, projeto: str | None) -> None:
-        self.set_filters(text, projeto)
+    def apply_filter(
+        self,
+        task_types: Iterable[str | TaskType] | None = None,
+    ) -> None:
+        self.set_filters(task_types=task_types)
 
     def has_selection(self) -> bool:
         return self.get_selected_task() is not None
@@ -381,9 +508,9 @@ class TaskList(QWidget):
         self._cards = []
         all_tasks: dict[str, Task] = {t.id: t for t in tasks}
 
-        filter_active = is_active(self._query, self._projeto)
+        filter_active = is_active(task_types=self._task_types)
         visible_tasks = (
-            [t for t in tasks if matches(t, self._query, self._projeto)]
+            [t for t in tasks if matches(t, task_types=self._task_types)]
             if filter_active
             else list(tasks)
         )
@@ -475,7 +602,7 @@ class TaskList(QWidget):
             | Qt.ItemFlag.ItemIsDragEnabled
             | Qt.ItemFlag.ItemIsDropEnabled
         )
-        item.setSizeHint(QSize(1, 116))
+        item.setSizeHint(QSize(1, 120))
         self._inner.addItem(item)
 
         card = TaskCard(task, self._callbacks, all_tasks_list, self._inner)

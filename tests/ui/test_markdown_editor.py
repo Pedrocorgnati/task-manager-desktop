@@ -39,6 +39,34 @@ def test_editor_accepts_plain_text(qtbot):
     assert editor.toPlainText() == "# Título\n\n- item"
 
 
+def test_editor_has_line_number_area(qtbot):
+    editor = MarkdownEditor()
+    qtbot.addWidget(editor)
+    assert editor.line_number_area_width() > 20
+
+
+def test_editor_bolds_markdown_headings(qtbot):
+    editor = MarkdownEditor()
+    qtbot.addWidget(editor)
+    editor.setPlainText("# Título")
+    editor.document().adjustSize()
+    first_block = editor.document().firstBlock()
+    formats = first_block.layout().formats()
+    assert formats
+
+
+def test_editor_toggle_fold_hides_second_level_children(qtbot):
+    editor = MarkdownEditor()
+    qtbot.addWidget(editor)
+    editor.setPlainText("# Título\n## Seção\nlinha 1\nlinha 2\n## Outra\nlinha 3")
+    editor.toggle_fold(1)
+    assert editor.document().findBlockByNumber(2).isVisible() is False
+    assert editor.document().findBlockByNumber(3).isVisible() is False
+    assert editor.document().findBlockByNumber(4).isVisible() is True
+    editor.toggle_fold(1)
+    assert editor.document().findBlockByNumber(2).isVisible() is True
+
+
 # ── EditorToolbar ─────────────────────────────────────────────────────────────
 
 

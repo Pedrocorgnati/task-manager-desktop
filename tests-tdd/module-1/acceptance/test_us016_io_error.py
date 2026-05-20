@@ -74,8 +74,7 @@ def test_create_io_error_shows_dialog(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_create_dialog({
         "title": "Nova task",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)
@@ -95,7 +94,7 @@ def test_edit_io_error_shows_dialog(_setup, monkeypatch, qtbot):
     """I/O error em EditTaskController dispara ErrorDialog e Salvar reabilita."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", type=TaskType.ONLINE, projeto="forge", deps=[])
+    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers.edit_task_controller import EditTaskController
@@ -112,8 +111,7 @@ def test_edit_io_error_shows_dialog(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Novo titulo",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)

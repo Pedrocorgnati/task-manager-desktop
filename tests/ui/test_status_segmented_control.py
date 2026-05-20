@@ -9,8 +9,7 @@ def _make_task(status: Status = Status.PENDING, deps=None) -> Task:
         id="t1",
         title="Test",
         status=status,
-        type=TaskType.ONLINE,
-        projeto="forge",
+        type=TaskType.AGENT,
         deps=deps or [],
     )
 
@@ -69,6 +68,26 @@ def test_update_task_changes_checked_button(qtbot):
     w.update_task(updated, {})
     assert w.btn_d.isChecked() is True
     assert w.btn_p.isChecked() is False
+
+
+def test_status_control_uses_vertical_black_rail_and_colored_dots(qtbot):
+    task = _make_task(Status.IN_PROGRESS)
+    w = StatusSegmentedControl(task, {}, None)
+    qtbot.addWidget(w)
+
+    assert w.property("testid") == "status-control-t1"
+    assert w.width() == 24
+    assert w.height() == 72
+    # Botoes quadrados, cada um 33% da altura do controle.
+    assert w.btn_p.width() == 24
+    assert w.btn_p.height() == 24
+    assert "#EAB308" in w.btn_p.styleSheet()
+    assert "#16A34A" in w.btn_ip.styleSheet()
+    assert "#71717A" in w.btn_d.styleSheet()
+    # Borda preta a esquerda separa os 3 botoes do resto do card.
+    assert "#000000" in w.btn_p.styleSheet()
+    # Botao selecionado recebe borda branca.
+    assert "2px solid #FFFFFF" in w.btn_ip.styleSheet()
 
 
 def test_signal_emits_canonical_status_strings(qtbot):

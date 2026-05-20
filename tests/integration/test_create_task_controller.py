@@ -55,8 +55,7 @@ def test_create_task_controller_happy_path_end_to_end(setup, monkeypatch):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_dialog_cls({
         "title": "End-to-end task",
-        "type": TaskType.ONLINE,
-        "projeto": "outros",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     ctrl.handle()
@@ -64,8 +63,7 @@ def test_create_task_controller_happy_path_end_to_end(setup, monkeypatch):
     tasks = repo.list_active()
     assert len(tasks) == 1
     assert tasks[0].title == "End-to-end task"
-    assert tasks[0].type == TaskType.ONLINE
-    assert tasks[0].projeto == "outros"
+    assert tasks[0].type == TaskType.AGENT
     assert tasks[0].deps == []
 
 
@@ -86,8 +84,7 @@ def test_create_task_controller_sad_path_io_error_keeps_dialog_open(setup, monke
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_dialog_cls({
         "title": "Will fail",
-        "type": TaskType.ONLINE,
-        "projeto": "outros",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)

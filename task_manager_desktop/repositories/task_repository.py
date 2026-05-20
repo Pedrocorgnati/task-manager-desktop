@@ -7,9 +7,9 @@ from pathlib import Path
 from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.core.models import (
     Status,
+    Subtask,
     Task,
     TaskType,
-    normalize_projeto,
     parse_deps,
 )
 
@@ -20,7 +20,6 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         title=row["title"],
         status=Status(row["status"]),
         type=TaskType(row["type"]),
-        projeto=row["projeto"],
         deps=parse_deps(row["deps"] or ""),
         notes=row["notes"] or "",
         order_index=row["order_index"] or 0,
@@ -30,23 +29,36 @@ def _row_to_task(row: sqlite3.Row) -> Task:
     )
 
 
+def _row_to_subtask(row: sqlite3.Row) -> Subtask:
+    state = int(row["done"] or 0)
+    return Subtask(
+        id=row["id"],
+        task_id=row["task_id"],
+        text=row["text"],
+        done=state == 2,
+        color=row["color"],
+        order_index=row["order_index"] or 0,
+        state=state,
+        notes=row["notes"] or "",
+    )
+
+
 class TaskRepository:
     def __init__(self, conn: sqlite3.Connection, db_path: Path | str = "") -> None:
         self._conn = conn
-        self.db_path: Path = Path(db_path) if db_path else Path()
+        self.db_path: str = str(db_path) if db_path else ""
 
     def create(self, task: Task) -> None:
         self._conn.execute(
             """
-            INSERT INTO tasks (id, title, status, type, projeto, deps, notes, order_index, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, title, status, type, deps, notes, order_index, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task.id,
                 task.title,
                 task.status.value,
                 task.type.value,
-                task.projeto,
                 ",".join(task.deps),
                 task.notes,
                 task.order_index,
@@ -60,7 +72,6 @@ class TaskRepository:
             "title",
             "status",
             "type",
-            "projeto",
             "deps",
             "notes",
             "order_index",
@@ -76,8 +87,6 @@ class TaskRepository:
                 col_map["status"] = val.value
             elif key == "type" and isinstance(val, TaskType):
                 col_map["type"] = val.value
-            elif key == "projeto":
-                col_map["projeto"] = normalize_projeto(str(val))
             else:
                 col_map[key] = val
 
@@ -150,12 +159,6 @@ class TaskRepository:
         )
         self._conn.commit()
 
-    def list_projetos(self) -> list[str]:
-        rows = self._conn.execute(
-            "SELECT DISTINCT projeto FROM tasks WHERE hidden_at IS NULL ORDER BY LOWER(projeto) ASC"
-        ).fetchall()
-        return [r["projeto"] for r in rows]
-
     def exists(self, task_id: str) -> bool:
         row = self._conn.execute("SELECT 1 FROM tasks WHERE id = ?", (task_id,)).fetchone()
         return row is not None
@@ -191,3 +194,62 @@ class TaskRepository:
                 (now, Status.DONE.value),
             )
             return cursor.rowcount
+
+    def list_subtasks(self, task_id: str) -> list[Subtask]:
+        rows = self._conn.execute(
+            "SELECT * FROM subtasks WHERE task_id = ? ORDER BY order_index ASC, created_at ASC",
+            (task_id,),
+        ).fetchall()
+        return [_row_to_subtask(row) for row in rows]
+
+    def create_subtask(self, subtask: Subtask) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO subtasks (id, task_id, text, done, color, order_index, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                subtask.id,
+                subtask.task_id,
+                subtask.text,
+                subtask.state if subtask.state else (2 if subtask.done else 0),
+                subtask.color,
+                subtask.order_index,
+                subtask.notes,
+            ),
+        )
+        self._conn.commit()
+
+    def update_subtask_done(self, subtask_id: str, done: bool) -> None:
+        self.update_subtask_state(subtask_id, 2 if done else 0)
+
+    def update_subtask_state(self, subtask_id: str, state: int) -> None:
+        self._conn.execute(
+            "UPDATE subtasks SET done = ? WHERE id = ?",
+            (state, subtask_id),
+        )
+        self._conn.commit()
+
+    def update_subtask_order_indexes(self, pairs: list[tuple[str, int]]) -> None:
+        if not pairs:
+            return
+        with self._conn:
+            self._conn.executemany(
+                "UPDATE subtasks SET order_index = ? WHERE id = ?",
+                [(order_index, subtask_id) for subtask_id, order_index in pairs],
+            )
+
+    def delete_done_subtasks(self, task_id: str) -> int:
+        with self._conn:
+            cursor = self._conn.execute(
+                "DELETE FROM subtasks WHERE task_id = ? AND done = 2",
+                (task_id,),
+            )
+            return cursor.rowcount
+
+    def update_subtask_notes(self, subtask_id: str, notes: str) -> None:
+        self._conn.execute(
+            "UPDATE subtasks SET notes = ? WHERE id = ?",
+            (notes, subtask_id),
+        )
+        self._conn.commit()

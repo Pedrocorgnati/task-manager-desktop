@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from PySide6.QtWidgets import QComboBox, QLineEdit, QPushButton, QToolButton
+from PySide6.QtWidgets import QCheckBox, QPushButton, QToolButton
 
+from task_manager_desktop.core.models import TaskType
 from task_manager_desktop.ui.header import HeaderBar
 
 
@@ -10,78 +11,26 @@ def test_layout_has_required_widgets(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
     assert isinstance(bar.btn_new, QPushButton)
-    assert isinstance(bar._search, QLineEdit)
-    assert isinstance(bar._project_filter, QComboBox)
-    assert isinstance(bar._btn_clear_done, QPushButton)
+    assert not hasattr(bar, "_search")
+    assert all(isinstance(cb, QCheckBox) for cb in bar._type_checkboxes.values())
+    assert isinstance(bar._btn_clear_done, QToolButton)
+    assert isinstance(bar._btn_terminal_layout, QToolButton)
+    assert isinstance(bar._btn_terminal_collapse, QToolButton)
     assert isinstance(bar._btn_trash, QToolButton)
 
 
-def test_search_placeholder(qtbot):
+def test_type_filter_defaults_to_all_selected(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    assert bar._search.placeholderText() == "Buscar por título ou notas... (Ctrl+F)"
+    assert bar.current_task_types() == frozenset(t.value for t in TaskType)
 
 
-def test_search_debounce_emits_once(qtbot):
+def test_type_filter_emits_selected_types(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    with qtbot.waitSignal(bar.search_text_changed, timeout=500) as blocker:
-        bar._search.setText("ab")
-        bar._search.setText("abc")
-    assert blocker.args == ["abc"]
-
-
-def test_set_projects_initial(qtbot):
-    bar = HeaderBar()
-    qtbot.addWidget(bar)
-    bar.set_projects(["b", "a"])
-    items = [bar._project_filter.itemText(i) for i in range(bar._project_filter.count())]
-    assert items == ["Todos", "a", "b"]
-
-
-def test_set_projects_preserves_selection(qtbot):
-    bar = HeaderBar()
-    qtbot.addWidget(bar)
-    bar.set_projects(["alpha", "beta", "gamma"])
-    bar._project_filter.setCurrentText("beta")
-    bar.set_projects(["alpha", "beta", "delta"])
-    assert bar._project_filter.currentText() == "beta"
-
-
-def test_set_projects_falls_back_to_todos_when_missing(qtbot):
-    bar = HeaderBar()
-    qtbot.addWidget(bar)
-    bar.set_projects(["alpha", "beta"])
-    bar._project_filter.setCurrentText("alpha")
-    bar.set_projects(["beta", "gamma"])
-    assert bar._project_filter.currentText() == "Todos"
-
-
-def test_current_project_maps_todos_to_none(qtbot):
-    bar = HeaderBar()
-    qtbot.addWidget(bar)
-    assert bar.current_project() is None
-    bar.set_projects(["alpha"])
-    bar._project_filter.setCurrentText("alpha")
-    assert bar.current_project() == "alpha"
-
-
-def test_clear_search_emits_empty(qtbot):
-    bar = HeaderBar()
-    qtbot.addWidget(bar)
-    bar._search.setText("xx")
-    qtbot.wait(200)
-    with qtbot.waitSignal(bar.search_text_changed, timeout=500) as blocker:
-        bar.clear_search()
-    assert blocker.args == [""]
-
-
-def test_focus_search_does_not_clear_text(qtbot):
-    bar = HeaderBar()
-    qtbot.addWidget(bar)
-    bar._search.setText("preserved")
-    bar.focus_search()
-    assert bar._search.text() == "preserved"
+    with qtbot.waitSignal(bar.type_filter_changed, timeout=200) as blocker:
+        bar._type_checkboxes["dev"].setChecked(False)
+    assert blocker.args == [frozenset({"human", "agent"})]
 
 
 def test_clear_done_button_emits(qtbot):
@@ -97,6 +46,38 @@ def test_trash_button_emits(qtbot):
     qtbot.addWidget(bar)
     with qtbot.waitSignal(bar.trash_clicked, timeout=200):
         bar._btn_trash.click()
+
+
+def test_terminal_layout_button_emits_toggle(qtbot):
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    with qtbot.waitSignal(bar.terminal_layout_mode_toggled, timeout=200) as blocker:
+        bar._btn_terminal_layout.click()
+    assert blocker.args == [True]
+
+
+def test_terminal_collapse_button_emits(qtbot):
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    with qtbot.waitSignal(bar.terminal_collapse_requested, timeout=200):
+        bar._btn_terminal_collapse.click()
+
+
+def test_datatest_buttons_use_short_labels(qtbot):
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    assert bar._btn_datatest.text() == "Data"
+    assert bar._btn_bodytest.text() == "Body"
+    assert bar._btn_btntest.text() == "Btn"
+
+
+def test_datatest_terminal_checkbox_emits_toggle(qtbot):
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    with qtbot.waitSignal(bar.datatest_terminal_write_toggled, timeout=200) as blocker:
+        bar._datatest_terminal_checkbox.setChecked(True)
+    assert blocker.args == [True]
+    assert bar.is_terminal_write_enabled() is True
 
 
 def test_ctrl_n_shortcut_registered(qtbot):
@@ -145,18 +126,19 @@ def test_clear_done_button_tooltip_when_disabled(qtbot):
 
 
 def test_clear_done_button_tooltip_when_enabled(qtbot):
-    """Tooltip is empty when button enabled (label is self-explanatory)."""
+    """Tooltip describes the icon-only action when enabled."""
     bar = HeaderBar()
     qtbot.addWidget(bar)
     bar.set_clear_done_enabled(True)
-    assert bar._btn_clear_done.toolTip() == ""
+    assert bar._btn_clear_done.toolTip() == "Mover tasks concluídas para a Lixeira"
 
 
-def test_clear_done_button_has_text_label(qtbot):
-    """Button shows text 'Limpar concluídas' (not icon-only)."""
+def test_clear_done_button_is_icon_only(qtbot):
+    """Button uses broom icon instead of text label."""
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    assert bar._btn_clear_done.text() == "Limpar concluídas"
+    assert bar._btn_clear_done.text() == ""
+    assert not bar._btn_clear_done.icon().isNull()
 
 
 def test_trash_button_tooltip(qtbot):

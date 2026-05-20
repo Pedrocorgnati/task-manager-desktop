@@ -1,7 +1,7 @@
 # suite: integration | module: module-1-gestao-de-tasks | task: TASK-2
 # @tdd-locked: do not edit without /tdd:unlock
-# covers: TASK-2/ST003 — EditTaskController wire-up end-to-end + RF-008 + projects_changed
-# TIDs: TID-1-2-023, TID-1-2-024, TID-1-2-025
+# covers: TASK-2/ST003 — EditTaskController wire-up end-to-end + RF-008
+# TIDs: TID-1-2-023, TID-1-2-024
 from __future__ import annotations
 
 import sqlite3
@@ -47,16 +47,15 @@ def test_edit_task_controller_happy_path_end_to_end(setup, monkeypatch):
     dialog -> resolve_cycles -> filtra deps -> update -> recalc setor self + dependentes diretos."""
     ctrl, repo, conn, db_path = setup
 
-    dep = Task(id="dep1", title="Dep", type=TaskType.ONLINE, projeto="f", deps=[])
-    main = Task(id="main", title="Main", type=TaskType.ONLINE, projeto="f", deps=[])
+    dep = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
+    main = Task(id="main", title="Main", type=TaskType.AGENT, deps=[])
     repo.create(dep)
     repo.create(main)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Main editada",
-        "type": TaskType.OFFLINE,
-        "projeto": "novo",
+        "type": TaskType.HUMAN,
         "deps": ["dep1"],
     }))
 
@@ -65,8 +64,7 @@ def test_edit_task_controller_happy_path_end_to_end(setup, monkeypatch):
     tasks = repo.list_active()
     updated = next(t for t in tasks if t.id == "main")
     assert updated.title == "Main editada"
-    assert updated.type == TaskType.OFFLINE
-    assert updated.projeto == "novo"
+    assert updated.type == TaskType.HUMAN
     assert "dep1" in updated.deps
 
     all_tasks = {t.id: t for t in tasks}
@@ -81,9 +79,9 @@ def test_edit_task_controller_recompute_only_one_level_deep(setup, monkeypatch):
     que depende de A (verifica ausencia de DFS)."""
     ctrl, repo, conn, db_path = setup
 
-    a = Task(id="a", title="A", type=TaskType.ONLINE, projeto="f", deps=[])
-    b = Task(id="b", title="B", type=TaskType.ONLINE, projeto="f", deps=["a"])
-    c = Task(id="c", title="C", type=TaskType.ONLINE, projeto="f", deps=["b"])
+    a = Task(id="a", title="A", type=TaskType.AGENT, deps=[])
+    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["a"])
+    c = Task(id="c", title="C", type=TaskType.AGENT, deps=["b"])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -91,8 +89,7 @@ def test_edit_task_controller_recompute_only_one_level_deep(setup, monkeypatch):
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "A editada",
-        "type": TaskType.ONLINE,
-        "projeto": "f",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -107,39 +104,3 @@ def test_edit_task_controller_recompute_only_one_level_deep(setup, monkeypatch):
     c_task = next(t for t in tasks if t.id == "c")
     assert "a" in b_task.deps
     assert "b" in c_task.deps
-
-
-# TID-1-2-025 | covers: TASK-2/ST003 projects_changed
-def test_edit_task_controller_emits_projects_changed_only_when_projeto_changes(setup, monkeypatch, qtbot):
-    """EditTaskController emite projects_changed apenas quando projeto realmente mudou
-    (idempotencia se igual)."""
-    ctrl, repo, conn, db_path = setup
-
-    task = Task(id="t1", title="T", type=TaskType.ONLINE, projeto="antigo", deps=[])
-    repo.create(task)
-
-    signals_emitted = []
-    ctrl.projects_changed.connect(lambda: signals_emitted.append(True))
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-
-    # Edit with same projeto — no signal
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "T",
-        "type": TaskType.ONLINE,
-        "projeto": "antigo",
-        "deps": [],
-    }))
-    ctrl.handle_edit(task)
-    assert signals_emitted == []
-
-    # Edit with different projeto — signal emitted
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "T",
-        "type": TaskType.ONLINE,
-        "projeto": "novo",
-        "deps": [],
-    }))
-    updated_task = next(t for t in repo.list_active() if t.id == "t1")
-    ctrl.handle_edit(updated_task)
-    assert signals_emitted == [True]

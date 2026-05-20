@@ -7,8 +7,11 @@ WINDOW_DEF_H: int = 900
 WINDOW_MIN_W: int = 900
 WINDOW_MIN_H: int = 600
 
-SPLITTER_SIZES: list[int] = [560, 840]
-SPLITTER_RATIO: float = 0.4
+SPLITTER_SIZES: list[int] = [490, 210, 700]
+SPLITTER_COLLAPSED_SIZES: list[int] = [490, 70, 840]
+SPLITTER_RATIOS: list[float] = [0.35, 0.15, 0.50]
+SPLITTER_COLLAPSED_RATIOS: list[float] = [0.35, 0.05, 0.60]
+SPLITTER_RATIO: float = 0.35
 
 FONT_FAMILY_BODY = "Ubuntu Sans, Noto Sans, DejaVu Sans, sans-serif"
 FONT_FAMILY_MONO = "JetBrains Mono, Ubuntu Mono, Fira Code, monospace"

@@ -1,19 +1,26 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QButtonGroup, QHBoxLayout, QPushButton, QWidget
+from PySide6.QtWidgets import QButtonGroup, QPushButton, QVBoxLayout, QWidget
 
 from task_manager_desktop.core.models import Status, Task
-from task_manager_desktop.core.sector import count_open_deps
 from task_manager_desktop.ui.theme import PALETTE
+
+# Cada botao e quadrado (width == height) e ocupa 33% da altura do controle.
+_BTN_SIZE = 24
+# Raio dos cantos que encaixam nas quinas do card (igual ao border-radius do card).
+_CORNER_RADIUS = 12
+# Dimensoes do controle: 1 botao de largura, 3 de altura — colado na borda do card.
+CONTROL_WIDTH = _BTN_SIZE
+CONTROL_HEIGHT = _BTN_SIZE * 3
 
 
 class StatusSegmentedControl(QWidget):
     status_changed = Signal(str)
 
     _STATUS_VALUES = [
-        ("P", Status.PENDING),
         ("IP", Status.IN_PROGRESS),
+        ("P", Status.PENDING),
         ("D", Status.DONE),
     ]
 
@@ -24,6 +31,11 @@ class StatusSegmentedControl(QWidget):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self.setObjectName("statusControl")
+        self.setProperty("testid", f"status-control-{task.id}")
+        self.setFixedSize(CONTROL_WIDTH, CONTROL_HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("QWidget#statusControl { background: transparent; }")
         self._task = task
         self._all_tasks = all_tasks
         self._surface = {
@@ -36,9 +48,9 @@ class StatusSegmentedControl(QWidget):
         self._apply_checked_style()
 
     def _build_ui(self) -> None:
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(3)
+        layout.setSpacing(0)
 
         self._btn_group = QButtonGroup(self)
         self._btn_group.setExclusive(True)
@@ -53,9 +65,10 @@ class StatusSegmentedControl(QWidget):
             btn = QPushButton(label, self)
             btn.setProperty("class", "seg-status")
             btn.setProperty("value", label)
+            btn.setProperty("testid", f"status-btn-{label.lower()}-{self._task.id}")
             btn.setCheckable(True)
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn.setFixedSize(42 if status == Status.IN_PROGRESS else 34, 26)
+            btn.setFixedSize(_BTN_SIZE, _BTN_SIZE)
             btn.setChecked(self._task.status == status)
             btn.setAccessibleName(_accessible_names[status])
             self._btn_group.addButton(btn)
@@ -81,36 +94,38 @@ class StatusSegmentedControl(QWidget):
         self._apply_checked_style()
 
     def _button_style(self, status: Status, checked: bool) -> str:
-        base_bg = self._surface.get("chip_bg", "rgba(24,24,27,0.45)")
-        base_text = self._surface.get("chip_text", "#F8FAFC")
-
-        if checked:
-            if status == Status.PENDING:
-                bg = "#18181B" if self._state_name == "waiting" else "#FBBF24"
-                fg = "#F8FAFC" if self._state_name == "waiting" else "#18181B"
-            elif status == Status.IN_PROGRESS:
-                has_open = count_open_deps(self._task.deps, self._all_tasks) > 0
-                bg = "#EAB308" if has_open else "#22C55E"
-                fg = "#18181B" if has_open else "#052E16"
-            else:
-                bg = "#E4E4E7"
-                fg = "#18181B"
-            border = bg
-            weight = 900
+        if status == Status.PENDING:
+            bg = "#EAB308"
+        elif status == Status.IN_PROGRESS:
+            bg = "#16A34A"
         else:
-            bg = base_bg
-            fg = base_text
-            border = "rgba(255,255,255,0.20)"
-            weight = 800
+            bg = "#71717A"
+
+        # Topo (IP) acompanha o canto superior direito do card; base (D) o
+        # canto inferior direito; meio (P) reto — lado direito desce em bloco.
+        if status == Status.IN_PROGRESS:
+            radius = f"border-top-right-radius: {_CORNER_RADIUS}px;"
+        elif status == Status.DONE:
+            radius = f"border-bottom-right-radius: {_CORNER_RADIUS}px;"
+        else:
+            radius = ""
+
+        # Selecionado: borda branca em volta. Caso contrario: apenas uma borda
+        # preta na esquerda, separando os 3 botoes do resto do card.
+        if checked:
+            border = "border: 2px solid #FFFFFF;"
+        else:
+            border = "border: none; border-left: 2px solid #000000;"
 
         return (
             "QPushButton {"
-            f"background: {bg}; color: {fg}; border: 1px solid {border};"
-            "border-radius: 8px; padding: 0;"
+            f"background: {bg}; color: #FFFFFF;"
+            f"{border}{radius}"
+            "padding: 0;"
             "font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
-            f"font-size: 11px; font-weight: {weight};"
+            "font-size: 9px; font-weight: 900;"
             "}"
-            "QPushButton:hover { background: rgba(255,255,255,0.22); }"
+            "QPushButton:hover { border: 2px solid #FFFFFF; }"
             "QPushButton:focus { border: 2px solid #FFFFFF; outline: none; }"
         )
 
@@ -135,6 +150,9 @@ class StatusSegmentedControl(QWidget):
     def update_task(self, task: Task, all_tasks: dict[str, Task]) -> None:
         self._task = task
         self._all_tasks = all_tasks
+        self.setProperty("testid", f"status-control-{task.id}")
+        for label, status in self._STATUS_VALUES:
+            self._buttons[status].setProperty("testid", f"status-btn-{label.lower()}-{task.id}")
         for status, btn in self._buttons.items():
             btn.setChecked(task.status == status)
         self._apply_checked_style()

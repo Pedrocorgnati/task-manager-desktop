@@ -20,7 +20,7 @@ classifiers = [
   "Operating System :: POSIX :: Linux",
   "Environment :: X11 Applications :: Qt",
 ]
-dependencies = ["PySide6>=6.4,<7.0"]
+dependencies = ["PySide6>=6.4,<7.0", "pyte>=0.8"]
 
 [project.optional-dependencies]
 dev = [

@@ -5,7 +5,7 @@ import sqlite3
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QHideEvent, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QHideEvent, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (
     QPushButton,
     QStackedWidget,
@@ -32,6 +32,8 @@ class MarkdownPane(QWidget):
 
     notes_saved = Signal(str, str)   # (task_id, new_notes)
     editing_changed = Signal(bool)   # True = modo editor
+    toggle_terminal_collapse_requested = Signal()
+    send_to_terminal_requested = Signal(str)  # texto atual do editor → terminal
 
     _IDX_VIEWER = 0
     _IDX_EDITOR = 1
@@ -42,8 +44,10 @@ class MarkdownPane(QWidget):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self.setProperty("testid", "markdown-pane")
         self._repo = repo
         self._current_task: Task | None = None
+        self._reader_light_mode = False
 
         self.setObjectName("markdownPane")
         self.setAccessibleName("Painel de notas")
@@ -53,6 +57,7 @@ class MarkdownPane(QWidget):
         self._edit_btn = QPushButton("Editar", self)
         self._edit_btn.setObjectName("editButton")
         self._edit_btn.setProperty("class", "edit-btn")
+        self._edit_btn.setProperty("testid", "markdown-edit-button")
         self._edit_btn.setToolTip("Editar notas desta task")
         self._edit_btn.setAccessibleName("Entrar no modo editor de notas")
         self._edit_btn.setVisible(False)
@@ -64,6 +69,7 @@ class MarkdownPane(QWidget):
 
         # --- Stack ---
         self._stack = QStackedWidget(self)
+        self._stack.setProperty("testid", "markdown-stack")
         self._stack.addWidget(self._viewer)   # index 0
         self._stack.addWidget(self._editor)   # index 1
 
@@ -78,11 +84,17 @@ class MarkdownPane(QWidget):
         self._toolbar.save_requested.connect(self._save)
         self._toolbar.cancel_requested.connect(self._cancel)
         self._toolbar.toggle_preview_requested.connect(self._toggle_preview)
+        self._toolbar.toggle_reader_theme_requested.connect(self._toggle_reader_theme)
+        self._toolbar.toggle_terminal_collapse_requested.connect(
+            self.toggle_terminal_collapse_requested.emit
+        )
+        self._toolbar.send_to_terminal_requested.connect(self._send_notes_to_terminal)
 
         self._save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self._editor)
         self._save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._save_shortcut.activated.connect(self._save)
 
+        self._apply_reader_theme()
         self.set_task(None)
 
     # ------------------------------------------------------------------
@@ -122,6 +134,9 @@ class MarkdownPane(QWidget):
 
     def clear(self) -> None:
         self.set_task(None)
+
+    def reader_light_mode(self) -> bool:
+        return self._reader_light_mode
 
     def hideEvent(self, event: QHideEvent) -> None:
         self._editor.clearFocus()
@@ -177,14 +192,84 @@ class MarkdownPane(QWidget):
         else:
             self._enter_editor()
 
+    def _toggle_reader_theme(self) -> None:
+        self._reader_light_mode = not self._reader_light_mode
+        self._apply_reader_theme()
+
+    def _send_notes_to_terminal(self) -> None:
+        """Emite o texto atual do editor para ser colado no terminal embarcado."""
+        self.send_to_terminal_requested.emit(self._editor.toPlainText())
+
+    def _apply_reader_theme(self) -> None:
+        if self._reader_light_mode:
+            editor_style = (
+                "QPlainTextEdit[class='md-editor'] {"
+                "background: #FAFAF7; color: #111116; border: none;"
+                "padding: 30px 38px;"
+                "font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+                "font-size: 13px;"
+                "selection-background-color: #FBBF24;"
+                "selection-color: #111116;"
+                "}"
+                "QPlainTextEdit[class='md-editor']:focus { border: none; outline: none; }"
+            )
+            browser_style = (
+                "QTextBrowser#markdownBrowser {"
+                "background: #FAFAF7; color: #111116; border: none;"
+                "padding: 30px 38px;"
+                "font-family: 'Ubuntu Sans', 'Noto Sans', 'DejaVu Sans', sans-serif;"
+                "font-size: 14px;"
+                "selection-background-color: #FBBF24;"
+                "selection-color: #111116;"
+                "}"
+            )
+        else:
+            editor_style = (
+                "QPlainTextEdit[class='md-editor'] {"
+                "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #101116, stop:1 #0D0E12);"
+                "color: #F8FAFC; border: none; padding: 30px 38px;"
+                "font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;"
+                "font-size: 13px;"
+                "selection-background-color: #FBBF24;"
+                "selection-color: #111116;"
+                "}"
+                "QPlainTextEdit[class='md-editor']:focus { border: none; outline: none; }"
+            )
+            browser_style = (
+                "QTextBrowser#markdownBrowser {"
+                "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #101116, stop:0.55 #0D0E12, stop:1 #14120A);"
+                "color: #F8FAFC; border: none; padding: 30px 38px;"
+                "font-family: 'Ubuntu Sans', 'Noto Sans', 'DejaVu Sans', sans-serif;"
+                "font-size: 14px;"
+                "selection-background-color: #FBBF24;"
+                "selection-color: #111116;"
+                "}"
+            )
+        self._editor.setStyleSheet(editor_style)
+        bg = QColor("#FAFAF7" if self._reader_light_mode else "#0D0E12")
+        fg = QColor("#111116" if self._reader_light_mode else "#F8FAFC")
+        palette = self._editor.palette()
+        palette.setColor(QPalette.ColorRole.Base, bg)
+        palette.setColor(QPalette.ColorRole.Text, fg)
+        palette.setColor(QPalette.ColorRole.Window, bg)
+        palette.setColor(QPalette.ColorRole.WindowText, fg)
+        self._editor.setPalette(palette)
+        self._editor.viewport().setAutoFillBackground(True)
+        self._editor.viewport().setPalette(palette)
+        self._editor.set_reader_theme(self._reader_light_mode)
+        self._viewer.setStyleSheet(browser_style)
+        self._viewer.set_reader_theme(self._reader_light_mode)
+        try:
+            self._viewer._browser.setStyleSheet(browser_style)
+        except Exception:  # noqa: BLE001
+            pass
+        self._toolbar.set_reader_light_mode(self._reader_light_mode)
+
     def _save(self) -> None:
         if self._current_task is None:
             return
         current_index = self._stack.currentIndex()
         new_notes = self._editor.toPlainText()
-        self._toolbar.btn_save.setEnabled(False)
-        self._toolbar.btn_save.setText("Salvando...")
-        self._toolbar.btn_toggle.setEnabled(False)
         self._editor.setReadOnly(True)
         try:
             if self._repo is not None:
@@ -194,9 +279,6 @@ class MarkdownPane(QWidget):
             self._show_save_error_toast(exc)
             return  # mantem stack em IDX_EDITOR
         finally:
-            self._toolbar.btn_save.setEnabled(True)
-            self._toolbar.btn_toggle.setEnabled(True)
-            self._toolbar.btn_save.setText("Salvar")
             self._editor.setReadOnly(False)
         try:
             self._current_task = dataclasses.replace(self._current_task, notes=new_notes)

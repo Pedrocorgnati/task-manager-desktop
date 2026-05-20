@@ -13,11 +13,14 @@ from task_manager_desktop.ui.main_window import MainWindowShell
 class TestMainWindowShellSplitter:
     """TID-0-3-012 | covers: TASK-3/ST004 BDD#1 | suite: acceptance"""
 
-    def test_cria_qsplitter_horizontal_left_560_right_840_handle_4(self, qtbot):
+    def test_cria_qsplitter_horizontal_35_15_50_handle_4(self, qtbot):
         from PySide6.QtCore import QSettings
         # Limpar settings para garantir first-run
         s = QSettings()
         s.remove("MainWindow/splitter")
+        s.remove("MainWindow/splitter_count")
+        s.remove("MainWindow/splitter_schema")
+        s.remove("MainWindow/middle_collapsed")
         s.sync()
 
         w = MainWindowShell()
@@ -25,10 +28,13 @@ class TestMainWindowShellSplitter:
         w.show()
         sizes = w._splitter.sizes()
         total = sum(sizes)
-        # Verificar proporcao [560, 840] -> [4:6] do total
-        assert len(sizes) == 2
-        assert abs(sizes[0] / total - 560 / 1400) < 0.05, (
-            f"Proporcao esquerda esperada ~0.4, got {sizes[0]/total:.2f} (sizes={sizes})"
+        # Verificar proporcao [490, 210, 700] -> [35%, 15%, 50%] do total
+        assert len(sizes) == 3
+        assert abs(sizes[0] / total - 0.35) < 0.05, (
+            f"Proporcao esquerda esperada ~0.35, got {sizes[0]/total:.2f} (sizes={sizes})"
+        )
+        assert abs(sizes[1] / total - 0.15) < 0.05, (
+            f"Proporcao intermediaria esperada ~0.15, got {sizes[1]/total:.2f} (sizes={sizes})"
         )
         assert w._splitter.handleWidth() == 4
 
@@ -76,8 +82,8 @@ class TestMainWindowShellSetRightWidget:
         w.set_right_widget(r1)
         w.set_right_widget(r2)
 
-        assert w._splitter.widget(1) is r2
-        assert w._splitter.count() == 2, "Splitter deve ter exatamente 2 widgets"
+        assert w._splitter.widget(2) is r2
+        assert w._splitter.count() == 3, "Splitter deve ter exatamente 3 widgets"
 
 
 class TestMainWindowShellSetHeaderWidget:

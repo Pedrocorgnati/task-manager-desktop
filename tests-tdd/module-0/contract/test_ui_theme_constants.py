@@ -10,7 +10,7 @@ class TestUiThemeCanonicalConstants:
     Contrato: ui.theme expoe constantes canonicas:
       - WINDOW_DEF_W == 1400
       - WINDOW_DEF_H == 900
-      - SPLITTER_SIZES == [560, 840]
+      - SPLITTER_SIZES == [490, 210, 700]
       - TOAST_DURATION_MS == 4000
     """
 
@@ -24,7 +24,10 @@ class TestUiThemeCanonicalConstants:
         assert theme.WINDOW_DEF_H == 900
 
         assert isinstance(theme.SPLITTER_SIZES, list)
-        assert theme.SPLITTER_SIZES == [560, 840]
+        assert theme.SPLITTER_SIZES == [490, 210, 700]
+        assert theme.SPLITTER_COLLAPSED_SIZES == [490, 70, 840]
+        assert theme.SPLITTER_RATIOS == [0.35, 0.15, 0.50]
+        assert theme.SPLITTER_COLLAPSED_RATIOS == [0.35, 0.05, 0.60]
 
         assert isinstance(theme.TOAST_DURATION_MS, int)
         assert theme.TOAST_DURATION_MS == 4000

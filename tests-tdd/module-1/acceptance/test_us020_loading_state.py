@@ -67,8 +67,7 @@ def test_ok_button_disabled_during_create_submit(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_create_dialog({
         "title": "Task X",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(repo, "create", check_create)
@@ -89,7 +88,7 @@ def test_save_button_disabled_during_edit_submit(_setup, monkeypatch, qtbot):
     """Botao Salvar do EditTaskDialog desabilitado durante update + WaitCursor."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", type=TaskType.ONLINE, projeto="forge", deps=[])
+    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers.edit_task_controller import EditTaskController
@@ -106,8 +105,7 @@ def test_save_button_disabled_during_edit_submit(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Updated",
-        "type": TaskType.ONLINE,
-        "projeto": "forge",
+        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(repo, "update", check_update)

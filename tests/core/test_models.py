@@ -3,13 +3,11 @@ from dataclasses import fields
 import pytest
 
 from task_manager_desktop.core.models import (
-    PROJETO_DEFAULT,
     Color,
     Sector,
     Status,
     Task,
     TaskType,
-    normalize_projeto,
     parse_deps,
 )
 
@@ -32,9 +30,9 @@ class TestEnums:
     def test_status_has_exactly_3_values(self):
         assert {s.value for s in Status} == {"pending", "in_progress", "done"}
 
-    def test_tasktype_has_exactly_2_values_with_online_default(self):
-        assert {t.value for t in TaskType} == {"online", "offline"}
-        assert Task(id="abc", title="t").type == TaskType.ONLINE
+    def test_tasktype_has_expected_values_with_agent_default(self):
+        assert {t.value for t in TaskType} == {"agent", "dev", "human"}
+        assert Task(id="abc", title="t").type == TaskType.AGENT
 
     def test_sector_label_pt(self):
         assert Sector(1).label_pt() == "Em andamento"
@@ -49,25 +47,13 @@ class TestEnums:
         assert {c.value for c in Color} == {"green", "yellow", "gray", "neutral"}
 
 
-class TestNormalizeProjeto:
-    @pytest.mark.parametrize("value", [None, "", "   ", "\t\n"])
-    def test_empty_or_none_returns_sentinel(self, value):
-        assert normalize_projeto(value) == PROJETO_DEFAULT
-        assert PROJETO_DEFAULT == "outros"
-
-    def test_preserves_non_empty_verbatim(self):
-        assert normalize_projeto("systemforge") == "systemforge"
-        assert normalize_projeto("  trimmed  ") == "  trimmed  "
-
-
 class TestTaskDataclass:
-    def test_has_11_fields(self):
-        assert len(fields(Task)) == 11
+    def test_has_10_fields(self):
+        assert len(fields(Task)) == 10
 
     def test_defaults_are_sane(self):
         t = Task(id="abc", title="x")
         assert t.deps == []
-        assert t.projeto == PROJETO_DEFAULT
-        assert t.type == TaskType.ONLINE
+        assert t.type == TaskType.AGENT
         assert t.completed_at is None
         assert t.hidden_at is None

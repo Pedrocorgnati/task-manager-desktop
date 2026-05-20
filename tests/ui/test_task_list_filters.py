@@ -23,17 +23,16 @@ def _make_task(
     *,
     tid: str,
     title: str,
-    projeto: str = "alpha",
     notes: str = "",
     status: Status = Status.PENDING,
     order_index: int = 1,
+    task_type: TaskType = TaskType.HUMAN,
 ) -> Task:
     t = Task(
         id=tid,
         title=title,
         status=status,
-        type=TaskType.OFFLINE,
-        projeto=projeto,
+        type=task_type,
         deps=[],
         notes=notes,
         order_index=order_index,
@@ -62,7 +61,7 @@ def _visible_separators(task_list: TaskList) -> int:
 
 
 def test_no_filter_shows_all_four_sectors(qtbot, repo):
-    _make_task(repo, tid="t1", title="alpha task", projeto="alpha")
+    _make_task(repo, tid="t1", title="alpha task")
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
@@ -72,30 +71,18 @@ def test_no_filter_shows_all_four_sectors(qtbot, repo):
     assert "t1" in _visible_task_ids(tl)
 
 
-def test_query_filter_filters_by_title(qtbot, repo):
-    _make_task(repo, tid="t1", title="bug login", projeto="alpha")
-    _make_task(repo, tid="t2", title="refactor header", projeto="alpha", order_index=2)
+def test_type_filter_filters_by_type(qtbot, repo):
+    _make_task(repo, tid="t1", title="human", task_type=TaskType.HUMAN)
+    _make_task(repo, tid="t2", title="dev", task_type=TaskType.DEV, order_index=2)
+    _make_task(repo, tid="t3", title="agent", task_type=TaskType.AGENT, order_index=3)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.set_filters("login", None)
+    tl.set_filters(task_types={"dev", "agent"})
 
-    assert _visible_task_ids(tl) == ["t1"]
-
-
-def test_projeto_filter_filters_by_projeto(qtbot, repo):
-    _make_task(repo, tid="t1", title="x", projeto="alpha")
-    _make_task(repo, tid="t2", title="y", projeto="beta", order_index=2)
-    tl = TaskList()
-    qtbot.addWidget(tl)
-    tl.set_repo(repo)
-    tl.refresh(repo.list_active())
-
-    tl.set_filters(None, "beta")
-
-    assert _visible_task_ids(tl) == ["t2"]
+    assert _visible_task_ids(tl) == ["t2", "t3"]
 
 
 def test_active_filter_hides_empty_sectors(qtbot, repo):
@@ -105,7 +92,6 @@ def test_active_filter_hides_empty_sectors(qtbot, repo):
         repo,
         tid="t1",
         title="match me",
-        projeto="alpha",
         status=Status.IN_PROGRESS,
     )
     tl = TaskList()
@@ -113,7 +99,7 @@ def test_active_filter_hides_empty_sectors(qtbot, repo):
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.set_filters("match", None)
+    tl.set_filters(task_types={"human"})
 
     # Exactly one separator (the ACTIVE sector that has the matching task)
     assert _visible_separators(tl) == 1
@@ -121,54 +107,41 @@ def test_active_filter_hides_empty_sectors(qtbot, repo):
 
 
 def test_clearing_filter_restores_all_sectors(qtbot, repo):
-    _make_task(repo, tid="t1", title="alpha task", projeto="alpha")
+    _make_task(repo, tid="t1", title="alpha task")
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.set_filters("nomatch", None)
+    tl.set_filters(task_types=set())
     assert _visible_task_ids(tl) == []
 
-    tl.set_filters("", "__all__")
+    tl.set_filters(task_types={t.value for t in TaskType})
     assert _visible_separators(tl) == 4
     assert _visible_task_ids(tl) == ["t1"]
 
 
-def test_set_filters_combines_query_and_projeto(qtbot, repo):
-    _make_task(repo, tid="t1", title="login bug", projeto="alpha")
-    _make_task(repo, tid="t2", title="login refactor", projeto="beta", order_index=2)
-    tl = TaskList()
-    qtbot.addWidget(tl)
-    tl.set_repo(repo)
-    tl.refresh(repo.list_active())
-
-    tl.set_filters("login", "beta")
-
-    assert _visible_task_ids(tl) == ["t2"]
-
-
 def test_visible_task_ids_helper(qtbot, repo):
-    _make_task(repo, tid="t1", title="alpha task", projeto="alpha")
-    _make_task(repo, tid="t2", title="other", projeto="beta", order_index=2)
+    _make_task(repo, tid="t1", title="alpha task", task_type=TaskType.HUMAN)
+    _make_task(repo, tid="t2", title="other", task_type=TaskType.DEV, order_index=2)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.set_filters(None, "alpha")
+    tl.set_filters(task_types={"human"})
     assert tl.visible_task_ids() == ["t1"]
 
 
 def test_filter_persists_across_refresh(qtbot, repo):
-    _make_task(repo, tid="t1", title="login bug", projeto="alpha")
-    _make_task(repo, tid="t2", title="refactor header", projeto="alpha", order_index=2)
+    _make_task(repo, tid="t1", title="human", task_type=TaskType.HUMAN)
+    _make_task(repo, tid="t2", title="dev", task_type=TaskType.DEV, order_index=2)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.set_filters("login", None)
+    tl.set_filters(task_types={"human"})
     assert _visible_task_ids(tl) == ["t1"]
 
     # simulate CRUD refresh (no filter args)
@@ -178,13 +151,13 @@ def test_filter_persists_across_refresh(qtbot, repo):
 
 
 def test_zero_matches_shows_empty_filter_label(qtbot, repo):
-    _make_task(repo, tid="t1", title="refactor ui", projeto="alpha")
+    _make_task(repo, tid="t1", title="refactor ui")
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.set_filters("zzznonexistent", None)
+    tl.set_filters(task_types=set())
 
     # isVisible requires parent hierarchy to be shown; use isHidden instead
     assert not tl._empty_filter_label.isHidden()
@@ -193,12 +166,12 @@ def test_zero_matches_shows_empty_filter_label(qtbot, repo):
 
 
 def test_apply_filter_alias(qtbot, repo):
-    _make_task(repo, tid="t1", title="login bug", projeto="alpha")
-    _make_task(repo, tid="t2", title="refactor", projeto="beta", order_index=2)
+    _make_task(repo, tid="t1", title="human", task_type=TaskType.HUMAN)
+    _make_task(repo, tid="t2", title="dev", task_type=TaskType.DEV, order_index=2)
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
     tl.refresh(repo.list_active())
 
-    tl.apply_filter("login", None)
+    tl.apply_filter(task_types={"human"})
     assert _visible_task_ids(tl) == ["t1"]

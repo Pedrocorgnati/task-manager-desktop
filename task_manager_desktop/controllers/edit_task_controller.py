@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import QApplication
 
 from task_manager_desktop.core.cycles import resolve_cycles
@@ -15,8 +15,6 @@ from task_manager_desktop.ui.toast import ToastWidget
 
 
 class EditTaskController(QObject):
-    projects_changed = Signal()
-
     def __init__(
         self,
         repo: TaskRepository,
@@ -53,14 +51,12 @@ class EditTaskController(QObject):
 
         clean_deps, cycle_desc = resolve_cycles(task.id, data["deps"], all_tasks_dict)
 
-        old_projeto = task.projeto
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self._repo.update(
                 task.id,
                 title=data["title"],
                 type=data["type"],
-                projeto=data["projeto"],
                 deps=clean_deps,
             )
         except sqlite3.Error as exc:
@@ -74,9 +70,6 @@ class EditTaskController(QObject):
             toast.show_message(
                 "Ciclo de dependência detectado. Dependência mais antiga removida automaticamente."
             )
-
-        if data["projeto"] != old_projeto:
-            self.projects_changed.emit()
 
         self._task_list.refresh(self._repo.list_active())
         return True
