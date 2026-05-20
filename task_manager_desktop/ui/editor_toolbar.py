@@ -74,10 +74,12 @@ class EditorToolbar(QWidget):
 
         self.btn_save = QPushButton("Salvar", self)
         self.btn_save.setProperty("testid", "editor-btn-save")
+        self.btn_save.setAccessibleName("Salvar notas")
         self.btn_save.setVisible(False)
 
         self.btn_cancel = QPushButton("Cancelar", self)
         self.btn_cancel.setProperty("testid", "editor-btn-cancel")
+        self.btn_cancel.setAccessibleName("Cancelar edição de notas")
         self.btn_cancel.setVisible(False)
 
         layout = QHBoxLayout(self)

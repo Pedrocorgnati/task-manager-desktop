@@ -27,9 +27,11 @@ _VALID_MODES = ("off", "all", "body", "buttons")
 # status-btn-{label}-{id} e status-control-{id}: todo o sufixo apos o prefixo
 # e dinamico por instancia, entao colapsa o conjunto inteiro para {ID}.
 _STATUS_ID_TOKEN = re.compile(r"(status-(?:btn|control)-)[a-z0-9-]+")
-# task-card-{id}: mascara apenas o segmento de id (3 chars), preservando
-# sufixos estaveis como -type, -title, -actions.
-_TASK_ID_TOKEN = re.compile(r"(?<=task-card-)[a-z0-9]{3}(?=-|$)")
+# task-card-{id}[-sufixo]: o id e dinamico (pode ter mais de um segmento),
+# enquanto os sufixos abaixo sao estaveis (ver TaskCard). Ancora no sufixo
+# conhecido e mascara apenas o trecho do id.
+_TASK_CARD_SUFFIX = "content|type|id|deps|actions|edit|delete|title|status-column|menu"
+_TASK_CARD_TESTID = re.compile(rf"^(task-card-).+?(-(?:{_TASK_CARD_SUFFIX}))?$")
 # subtask ids tem o formato 'st-' + 10 chars hex (ver SubtaskPane._add_subtask).
 _SUBTASK_ID_TOKEN = re.compile(r"\bst-[0-9a-f]{10}\b")
 
@@ -44,7 +46,9 @@ def _mask_dynamic_testid(raw: str) -> str:
         'subtask-row-st-ab12cd34ef' -> 'subtask-row-{ID}'
     """
     raw = _STATUS_ID_TOKEN.sub(r"\1{ID}", raw)
-    raw = _TASK_ID_TOKEN.sub("{ID}", raw)
+    match = _TASK_CARD_TESTID.match(raw)
+    if match:
+        raw = f"{match.group(1)}{{ID}}{match.group(2) or ''}"
     return _SUBTASK_ID_TOKEN.sub("{ID}", raw)
 
 
