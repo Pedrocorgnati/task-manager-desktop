@@ -485,13 +485,14 @@ class TaskCard(QFrame):
         state = self._card_state()
         style = _CARD_STYLE[state]
         selected_border = "border-left: 3px solid #FFFFFF;" if self._selected else ""
-        # Task permanente: borda azul redundante ao badge "PERM" (source.md
-        # rejeicao #9). A borda esquerda preserva os 7px de espessura.
+        # Task permanente: a marca fica APENAS no detalhe azul da borda
+        # esquerda (7px). A borda externa azul em volta era redundante ao
+        # badge "PERM" (source.md rejeicao #9) e foi removida — o contorno
+        # externo e o mesmo neutro das demais tasks.
+        outer_border = "border: 1px solid rgba(255,255,255,0.09);"
         if self._task.permanente:
-            outer_border = f"border: 2px solid {PERMANENT_ACCENT};"
             left_border = f"border-left: 7px solid {PERMANENT_ACCENT};"
         else:
-            outer_border = "border: 1px solid rgba(255,255,255,0.09);"
             left_border = f"border-left: 7px solid {style['accent']};"
         self.setStyleSheet(
             "QFrame#taskCard { /* legacy-border #3F3F46 */"
