@@ -1,5 +1,10 @@
 # suite: acceptance + integration | module: module-2-setores-dependencias | task: TASK-3
-# @tdd-locked: do not edit without /tdd:unlock
+# @tdd-unlocked: 2026-05-21 (hardening round repo layer; ver source.md 05-20)
+#   Justificativa: o hardening round (fix #3) tornou update_order_indexes
+#   RENORMALIZADORA — apos aplicar os pares, os order_index ficam contiguos
+#   0..N-1 na ordem canonica. test_reorder_persists_through_restart passa a
+#   verificar a ORDEM relativa + contiguidade (o ponto real do teste e a ordem
+#   renderizada sobreviver ao restart) em vez dos literais de entrada.
 # covers: US-006 (cenarios 1-3), US-023 (cenarios 1-3), AC-T-005..010, AC-T-013
 # TIDs: TID-2-3-011, TID-2-3-012, TID-2-3-013, TID-2-3-014,
 #        TID-2-3-015 (integration), TID-2-3-016 (integration),
@@ -327,14 +332,15 @@ def test_reorder_persists_through_restart(qtbot, repo_factory):
     # Persist reorder: C, A, B
     repo.update_order_indexes([("c", 1), ("a", 2), ("b", 3)])
 
-    # Verify DB reflects new order
+    # Verify DB reflects new order. Hardening fix #3: order_index e
+    # renormalizado para sequencia contigua 0..N-1; a ORDEM relativa pedida
+    # (c < a < b) e o que importa e e preservada.
     rows = {
         r["id"]: r["order_index"]
         for r in repo._conn.execute("SELECT id, order_index FROM tasks")
     }
-    assert rows["c"] == 1
-    assert rows["a"] == 2
-    assert rows["b"] == 3
+    assert sorted(rows.values()) == [0, 1, 2]
+    assert rows["c"] < rows["a"] < rows["b"]
 
     # Simulate restart: new TaskList reads from same repo
     tl = TaskList()

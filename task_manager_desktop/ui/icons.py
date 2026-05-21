@@ -125,6 +125,25 @@ CHECK_SVG = (
     "</svg>"
 )
 
+# Estrela de favorito no card. Variante preenchida (favorito=True, dourada) e
+# variante contorno (favorito=False, cinza). source.md secao 3.6 item 1.
+_STAR_PATH = (
+    "M12 2.6l2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.97 6.2 21l1.1-6.47"
+    "L2.6 9.95l6.5-.95L12 2.6Z"
+)
+STAR_FILLED_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"'
+    ' fill="#FBBF24" stroke="#F59E0B" stroke-width="1.4" stroke-linejoin="round">'
+    f'<path d="{_STAR_PATH}"/>'
+    "</svg>"
+)
+STAR_OUTLINE_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+    ' stroke="#A1A1AA" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    f'<path d="{_STAR_PATH}"/>'
+    "</svg>"
+)
+
 BROOM_SVG = """\
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
   <path d="M14.7 3.4 21 9.7" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round"/>

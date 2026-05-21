@@ -5,6 +5,7 @@ from typing import Any
 from PySide6.QtCore import QEvent, QSize, Qt
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -88,6 +89,35 @@ class TaskFormWidget(QWidget):
         self.deps_input.setAccessibleName("IDs de dependências separados por vírgula")
         self.deps_input.setProperty("mono", True)
         layout.addWidget(self.deps_input)
+
+        layout.addWidget(self._field_label("Marcadores (opcional)"))
+        flags_box = QGroupBox(self)
+        flags_box.setFlat(True)
+        flags_box.setStyleSheet("QGroupBox { border: none; padding: 0; margin: 0; }")
+        flags_layout = QHBoxLayout(flags_box)
+        flags_layout.setContentsMargins(0, 0, 0, 0)
+        flags_layout.setSpacing(16)
+
+        self.favorito_checkbox = QCheckBox("Favorito", flags_box)
+        self.favorito_checkbox.setObjectName("taskFormFavorito")
+        self.favorito_checkbox.setProperty("testid", "task-form-favorito")
+        self.favorito_checkbox.setAccessibleName("Marcar task como favorito")
+        self.favorito_checkbox.setToolTip("Favoritos aparecem no topo do setor")
+        self.favorito_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        self.permanente_checkbox = QCheckBox("Permanente", flags_box)
+        self.permanente_checkbox.setObjectName("taskFormPermanente")
+        self.permanente_checkbox.setProperty("testid", "task-form-permanente")
+        self.permanente_checkbox.setAccessibleName("Marcar task como permanente")
+        self.permanente_checkbox.setToolTip(
+            "Tasks permanentes não somem ao concluir"
+        )
+        self.permanente_checkbox.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        flags_layout.addWidget(self.favorito_checkbox)
+        flags_layout.addWidget(self.permanente_checkbox)
+        flags_layout.addStretch()
+        layout.addWidget(flags_box)
 
         if self._creating:
             self._build_subtask_section(layout)
@@ -195,6 +225,8 @@ class TaskFormWidget(QWidget):
         else:
             self.radio_human.setChecked(True)
         self.deps_input.setText(", ".join(task.deps))
+        self.favorito_checkbox.setChecked(bool(task.favorito))
+        self.permanente_checkbox.setChecked(bool(task.permanente))
 
     def get_data(self) -> dict[str, Any]:
         if self.radio_agent.isChecked():
@@ -207,6 +239,8 @@ class TaskFormWidget(QWidget):
             "title": self.title_input.text().strip(),
             "type": task_type,
             "deps": parse_deps(self.deps_input.text()),
+            "favorito": self.favorito_checkbox.isChecked(),
+            "permanente": self.permanente_checkbox.isChecked(),
             "subtasks": self._collect_subtasks(),
         }
 

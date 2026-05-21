@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, Qt, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
-    QGridLayout,
     QHBoxLayout,
+    QLabel,
     QPushButton,
     QToolButton,
     QVBoxLayout,
@@ -62,6 +62,7 @@ class HeaderBar(QWidget):
     datatest_terminal_write_toggled = Signal(bool)
     terminal_layout_mode_toggled = Signal(bool)
     terminal_collapse_requested = Signal()
+    _PX_RULER_WIDTHS = (10, 50, 100)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -70,6 +71,9 @@ class HeaderBar(QWidget):
         self.setProperty("testid", "header")
         self.setAccessibleName("Barra de cabeçalho")
         self._type_checkboxes: dict[str, QCheckBox] = {}
+        self._px_ruler_toasts: list[QLabel] = []
+        self._px_ruler_visible = False
+        self._px_ruler_resize_filter: QObject | None = None
 
         self._build_ui()
 
@@ -104,6 +108,7 @@ class HeaderBar(QWidget):
         self._type_filter.setProperty("testid", "header-type-filter")
         self._type_filter.setAccessibleName("Filtro por tipo de task")
         self._type_filter.setFixedHeight(54)
+        self._type_filter.setFixedWidth(132)
         type_layout = QVBoxLayout(self._type_filter)
         type_layout.setContentsMargins(10, 1, 10, 1)
         type_layout.setSpacing(0)
@@ -123,10 +128,13 @@ class HeaderBar(QWidget):
         self._btn_clear_done = QToolButton(self._primary_controls)
         self._btn_clear_done.setObjectName("headerClearDone")
         self._btn_clear_done.setProperty("testid", "header-clear-done-button")
+        self._btn_clear_done.setProperty("data-testid", "header-clear-done-button")
         self._btn_clear_done.setAccessibleName(
             "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
         )
-        self._btn_clear_done.setToolTip("Nenhuma task concluída visível")  # default: disabled
+        self._btn_clear_done.setToolTip(
+            "Sem tasks concluídas não-permanentes para ocultar"
+        )  # default: disabled
         self._btn_clear_done.setEnabled(False)  # disabled by default
         self._btn_clear_done.setIcon(svg_to_icon(BROOM_SVG, 20))
         self._btn_clear_done.setIconSize(QSize(20, 20))
@@ -138,6 +146,7 @@ class HeaderBar(QWidget):
         self._btn_trash = QToolButton(self._primary_controls)
         self._btn_trash.setObjectName("headerTrash")
         self._btn_trash.setProperty("testid", "header-trash-button")
+        self._btn_trash.setProperty("data-testid", "header-trash-button")
         self._btn_trash.setAccessibleName("Abrir Lixeira de tasks")
         self._btn_trash.setToolTip("Lixeira (tasks ocultas até 30 dias)")
         self._btn_trash.setIcon(svg_to_icon(TRASH_SVG, 20))
@@ -197,9 +206,16 @@ class HeaderBar(QWidget):
         self._btn_btntest.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_btntest.setStyleSheet(_TEST_MODE_BTN_STYLE_BTN)
 
+        self._btn_px_ruler = QPushButton("px ruler")
+        self._btn_px_ruler.setFixedSize(68, 16)
+        self._btn_px_ruler.setCheckable(True)
+        self._btn_px_ruler.setToolTip("Mostrar régua de largura em pixels")
+        self._btn_px_ruler.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_px_ruler.setStyleSheet(_TEST_MODE_BTN_STYLE_BTN)
+        self._btn_px_ruler.toggled.connect(self._toggle_px_ruler)
+
         self._datatest_terminal_checkbox = QCheckBox(self)
         self._datatest_terminal_checkbox.setObjectName("headerDataTestTerminalToggle")
-        self._datatest_terminal_checkbox.setProperty("testid", "header-datatest-terminal-checkbox")
         self._datatest_terminal_checkbox.setFixedSize(16, 16)
         self._datatest_terminal_checkbox.setToolTip(
             "Ao clicar no overlay, envia seletor para o terminal e foca no terminal"
@@ -215,20 +231,18 @@ class HeaderBar(QWidget):
         self._datatest_terminal_checkbox.toggled.connect(self.datatest_terminal_write_toggled.emit)
 
         self._test_mode_grid = QWidget(self)
-        self._test_mode_grid.setProperty("testid", "header-test-mode-grid")
-        _tm_grid_layout = QGridLayout(self._test_mode_grid)
-        _tm_grid_layout.setContentsMargins(0, 0, 0, 0)
-        _tm_grid_layout.setHorizontalSpacing(4)
-        _tm_grid_layout.setVerticalSpacing(2)
-        _tm_grid_layout.addWidget(
+        self._test_mode_grid.setProperty("testid", "test-mode-overlay-controls")
+        _tm_row_layout = QHBoxLayout(self._test_mode_grid)
+        _tm_row_layout.setContentsMargins(0, 0, 0, 0)
+        _tm_row_layout.setSpacing(4)
+        _tm_row_layout.addWidget(
             self._datatest_terminal_checkbox,
-            0,
-            0,
-            alignment=Qt.AlignmentFlag.AlignCenter,
+            alignment=Qt.AlignmentFlag.AlignVCenter,
         )
-        _tm_grid_layout.addWidget(self._btn_datatest, 0, 1)
-        _tm_grid_layout.addWidget(self._btn_bodytest, 1, 0)
-        _tm_grid_layout.addWidget(self._btn_btntest, 1, 1)
+        _tm_row_layout.addWidget(self._btn_datatest)
+        _tm_row_layout.addWidget(self._btn_bodytest)
+        _tm_row_layout.addWidget(self._btn_btntest)
+        _tm_row_layout.addWidget(self._btn_px_ruler)
         # Nao entra no layout do header: a grid e reparentada como overlay
         # no canto inferior direito da coluna 1 via take_test_mode_grid().
 
@@ -274,7 +288,9 @@ class HeaderBar(QWidget):
         """Enable/disable 'Limpar concluídas' button based on visible done tasks."""
         self._btn_clear_done.setEnabled(has_visible_done)
         if not has_visible_done:
-            self._btn_clear_done.setToolTip("Nenhuma task concluída visível")
+            self._btn_clear_done.setToolTip(
+                "Sem tasks concluídas não-permanentes para ocultar"
+            )
             self._btn_clear_done.setAccessibleName(
                 "Mover tasks concluídas para a Lixeira (nenhuma disponível)"
             )
@@ -361,6 +377,82 @@ class HeaderBar(QWidget):
             else "Layout row: terminal no reader"
         )
         self.terminal_layout_mode_toggled.emit(checked)
+
+    def _toggle_px_ruler(self, checked: bool) -> None:
+        self._px_ruler_visible = checked
+        if checked:
+            self._show_px_ruler_toasts()
+        else:
+            self._hide_px_ruler_toasts()
+
+    def _show_px_ruler_toasts(self) -> None:
+        host = self._test_mode_grid.parentWidget() or self
+        self._hide_px_ruler_toasts()
+        for width_px in self._PX_RULER_WIDTHS:
+            toast = QLabel(f"{width_px}px", host)
+            toast.setObjectName(f"pxRulerToast{width_px}")
+            toast.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            toast.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+            toast.setFixedWidth(width_px)
+            toast.setFixedHeight(20)
+            toast.setStyleSheet(
+                "background-color: rgba(34, 197, 94, 0.95);"
+                "color: #FFFFFF;"
+                "font-size: 10px;"
+                "font-weight: 700;"
+                "border-radius: 3px;"
+            )
+            toast.show()
+            toast.raise_()
+            self._px_ruler_toasts.append(toast)
+        self._ensure_px_ruler_resize_filter(host)
+        self._reposition_px_ruler_toasts()
+
+    def _hide_px_ruler_toasts(self) -> None:
+        for toast in self._px_ruler_toasts:
+            toast.hide()
+            toast.deleteLater()
+        self._px_ruler_toasts.clear()
+        self._remove_px_ruler_resize_filter()
+
+    def _reposition_px_ruler_toasts(self) -> None:
+        if not self._px_ruler_toasts:
+            return
+        host = self._px_ruler_toasts[0].parentWidget()
+        if host is None:
+            return
+        margin = 8
+        gap = 6
+        y = host.height() - margin
+        for toast in reversed(self._px_ruler_toasts):
+            y -= toast.height()
+            toast.move(margin, max(0, y))
+            toast.raise_()
+            y -= gap
+
+    def _ensure_px_ruler_resize_filter(self, host: QWidget) -> None:
+        class _ResizeFilter(QObject):
+            def __init__(self, owner: HeaderBar, parent: QObject | None = None) -> None:
+                super().__init__(parent)
+                self._owner = owner
+
+            def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+                if event.type() == QEvent.Type.Resize:
+                    self._owner._reposition_px_ruler_toasts()
+                return False
+
+        self._remove_px_ruler_resize_filter()
+        self._px_ruler_resize_filter = _ResizeFilter(self, host)
+        host.installEventFilter(self._px_ruler_resize_filter)
+
+    def _remove_px_ruler_resize_filter(self) -> None:
+        filter_obj = self._px_ruler_resize_filter
+        if filter_obj is None:
+            return
+        host = filter_obj.parent()
+        if isinstance(host, QWidget):
+            host.removeEventFilter(filter_obj)
+        self._px_ruler_resize_filter = None
 
     def set_terminal_collapsed(self, collapsed: bool) -> None:
         self._btn_terminal_collapse.setText("▲" if collapsed else "▼")

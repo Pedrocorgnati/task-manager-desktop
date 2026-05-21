@@ -1,11 +1,25 @@
 from __future__ import annotations
 
-from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QSize, Qt, Signal
+import logging
+
+from PySide6.QtCore import (
+    QEasingCurve,
+    QEvent,
+    QObject,
+    QPropertyAnimation,
+    QSignalBlocker,
+    QSize,
+    Qt,
+    QTimer,
+    Signal,
+)
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMenu,
     QPushButton,
     QSizePolicy,
@@ -15,12 +29,14 @@ from PySide6.QtWidgets import (
 )
 
 from task_manager_desktop.core.models import Status, Task, TaskType
-from task_manager_desktop.core.sector import count_open_deps
+from task_manager_desktop.core.sector import PERMANENT_ACCENT, count_open_deps
 from task_manager_desktop.ui.icons import (
     COMPUTER_SVG,
     PENCIL_WHITE_SVG,
     PROFILE_SVG,
     ROBOT_SVG,
+    STAR_FILLED_SVG,
+    STAR_OUTLINE_SVG,
     TRASH_SVG,
     svg_to_icon,
     svg_to_pixmap,
@@ -83,6 +99,20 @@ _CARD_STYLE: dict[str, dict[str, str]] = {
 }
 
 
+_log = logging.getLogger(__name__)
+
+# Janela de debounce do autosave da estrela favorito (source.md AC-14): cliques
+# rapidos sucessivos colapsam num unico autosave.
+_FAVORITO_DEBOUNCE_MS = 250
+# Opacidade do icone da estrela enquanto o autosave esta pendente (sinal visual).
+_STAR_PENDING_OPACITY = 0.4
+# Watchdog do lockout in-flight da estrela (source.md secao 9): se o callback de
+# autosave nunca resolver (UI-thread travada, lock no SQLite), a estrela ficaria
+# desabilitada para sempre. Decorrido este prazo sem resolucao, o watchdog forca
+# rollback ao valor persistido, re-habilita a estrela e loga um erro explicito.
+_STAR_IN_FLIGHT_WATCHDOG_MS = 5000
+
+
 class TaskCard(QFrame):
     selected = Signal(object)
 
@@ -99,6 +129,26 @@ class TaskCard(QFrame):
         self._all_tasks_list = all_tasks
         self._all_tasks: dict[str, Task] = {t.id: t for t in all_tasks}
         self._selected = False
+
+        # Estado do autosave debounced da estrela favorito (source.md AC-14).
+        # `_fav_pending_value` guarda o valor que o usuario pediu; `_fav_syncing`
+        # bloqueia reentrancia quando o rollback reverte o checked programaticamente;
+        # `_fav_in_flight` marca que o request ja foi despachado (debounce disparou)
+        # e a estrela esta travada ate o request resolver (source.md AC-14).
+        self._fav_pending_value = task.favorito
+        self._fav_syncing = False
+        self._fav_in_flight = False
+        self._fav_debounce = QTimer(self)
+        self._fav_debounce.setSingleShot(True)
+        self._fav_debounce.setInterval(_FAVORITO_DEBOUNCE_MS)
+        self._fav_debounce.timeout.connect(self._on_favorite_debounce_fired)
+        # Watchdog do lockout in-flight (source.md secao 9): armado quando o
+        # request e despachado; se disparar antes do request resolver, forca
+        # rollback + re-enable para a estrela nao ficar travada indefinidamente.
+        self._fav_watchdog = QTimer(self)
+        self._fav_watchdog.setSingleShot(True)
+        self._fav_watchdog.setInterval(_STAR_IN_FLIGHT_WATCHDOG_MS)
+        self._fav_watchdog.timeout.connect(self._on_favorite_watchdog_fired)
 
         self.setObjectName("taskCard")
         self.setProperty("testid", f"task-card-{task.id}")
@@ -155,6 +205,36 @@ class TaskCard(QFrame):
         outer.addWidget(self._top_row, 0)
         outer.addWidget(self._middle_row, 1)
 
+        # Estrela de favorito — primeira posicao da primeira linha. Checkable
+        # com autosave debounced; o estado inicial e aplicado ANTES de conectar
+        # `toggled` para nao disparar autosave so pela renderizacao.
+        self._star_btn = QToolButton(self._top_row)
+        self._star_btn.setObjectName("cardFavoriteStar")
+        self._star_btn.setProperty("testid", f"task-card-{self._task.id}-favorito")
+        self._star_btn.setCheckable(True)
+        self._star_btn.setChecked(self._task.favorito)
+        self._star_btn.setIconSize(QSize(16, 16))
+        self._star_btn.setFixedSize(20, 20)
+        self._star_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._star_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._star_btn.setAccessibleName("Marcar como favorito")
+        self._star_btn.setStyleSheet(
+            "QToolButton#cardFavoriteStar {"
+            "background: transparent; border: none; padding: 0;"
+            "}"
+            "QToolButton#cardFavoriteStar:focus {"
+            "border: 1px solid rgba(255,255,255,0.55); border-radius: 6px;"
+            "}"
+        )
+        # Efeito de opacidade reutilizado para sinalizar o estado "pending".
+        self._star_opacity = QGraphicsOpacityEffect(self._star_btn)
+        self._star_opacity.setOpacity(1.0)
+        self._star_btn.setGraphicsEffect(self._star_opacity)
+        self._star_btn.toggled.connect(self._on_star_toggled)
+        top_row.addWidget(self._star_btn)
+        self._refresh_star_icon()
+        self._set_star_pending(False)
+
         # Icone de tipo — primeira posicao da primeira linha.
         self._type_icon = QLabel(self)
         self._type_icon.setObjectName("cardTypeChip")
@@ -166,16 +246,35 @@ class TaskCard(QFrame):
         )
         top_row.addWidget(self._type_icon)
 
-        self._id_label = QLabel(self._task.id, self)
+        self._id_label = QLabel(f"#{self._task.id}", self)
         self._id_label.setObjectName("cardId")
         self._id_label.setProperty("testid", f"task-card-{self._task.id}-id")
         top_row.addWidget(self._id_label)
+
+        # Badge textual redundante a borda azul do setor Permanentes
+        # (source.md rejeicao #9: cor sozinha nao sinaliza estado).
+        self._perm_badge = QLabel("PERM", self._top_row)
+        self._perm_badge.setObjectName("cardPermanenteBadge")
+        self._perm_badge.setProperty(
+            "testid", f"task-card-{self._task.id}-permanente-badge"
+        )
+        self._perm_badge.setStyleSheet(
+            f"background: {PERMANENT_ACCENT}; color: #FFFFFF; font-size: 9px; "
+            "font-weight: 800; letter-spacing: 0.5px; border-radius: 4px; "
+            "padding: 1px 5px;"
+        )
+        self._perm_badge.setToolTip("Task permanente: não some ao concluir")
+        self._perm_badge.setAccessibleName("Task permanente")
+        self._perm_badge.setVisible(self._task.permanente)
+        top_row.addWidget(self._perm_badge)
 
         self._deps_label = QLabel(self)
         self._deps_label.setObjectName("cardDeps")
         self._deps_label.setProperty("testid", f"task-card-{self._task.id}-deps")
         self._deps_label.setTextFormat(Qt.TextFormat.PlainText)
-        self._deps_label.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        # Permite encolher quando a coluna 1 ficar estreita, evitando overflow horizontal do card.
+        self._deps_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+        self._deps_label.setMinimumWidth(0)
         top_row.addWidget(self._deps_label)
         top_row.addStretch()
 
@@ -218,7 +317,20 @@ class TaskCard(QFrame):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._title_label.setToolTip(self._task.title)
+        self._title_label.mouseDoubleClickEvent = lambda _e: self._begin_inline_edit()
         middle_row.addWidget(self._title_label)
+
+        # Edicao inline do titulo — visivel apenas durante o double-click edit.
+        self._title_edit = QLineEdit(self._task.title, self)
+        self._title_edit.setObjectName("cardTitleEdit")
+        self._title_edit.setProperty("testid", f"task-card-{self._task.id}-title-edit")
+        self._title_edit.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self._title_edit.installEventFilter(self)
+        self._title_edit.editingFinished.connect(self._commit_inline_edit)
+        self._title_edit.hide()
+        middle_row.addWidget(self._title_edit)
 
         # Coluna de status — colada na borda direita, altura total do card.
         self._status_col = QWidget(self)
@@ -262,15 +374,130 @@ class TaskCard(QFrame):
             self._deps_label.setToolTip("")
             self._deps_label.hide()
 
+    # ------------------------------------------------------------------
+    # Estrela de favorito (autosave debounced — source.md secao 3.6 / AC-14)
+    # ------------------------------------------------------------------
+
+    def _refresh_star_icon(self) -> None:
+        """Sincroniza icone e descricao acessivel da estrela com o checked atual."""
+        checked = self._star_btn.isChecked()
+        svg = STAR_FILLED_SVG if checked else STAR_OUTLINE_SVG
+        self._star_btn.setIcon(svg_to_icon(svg, 16))
+        self._star_btn.setAccessibleDescription("Favorita" if checked else "Não favorita")
+
+    def _set_star_pending(self, pending: bool) -> None:
+        """Estado visual do autosave: opacidade reduzida + tooltip enquanto pendente."""
+        self._star_opacity.setOpacity(_STAR_PENDING_OPACITY if pending else 1.0)
+        self._star_btn.setToolTip(
+            "Salvando favorito..." if pending else "Favoritar task"
+        )
+
+    def _set_star_in_flight(self, in_flight: bool) -> None:
+        """Trava/destrava a interacao da estrela enquanto o request esta no ar.
+
+        source.md AC-14: a estrela em estado pending durante o autosave nao
+        aceita novo toggle. A janela de debounce de 250 ms ANTES do request
+        ainda colapsa cliques rapidos (ultimo valor vence); somente depois
+        que o debounce dispara e o request e despachado a estrela e travada,
+        ate o request resolver (sucesso ou rollback).
+        """
+        self._fav_in_flight = in_flight
+        # setEnabled(False) recusa cliques/teclado; reabilitado no resolve.
+        self._star_btn.setEnabled(not in_flight)
+        # Watchdog: armado junto com o lockout; parado quando o request resolve
+        # (sucesso ou rollback) para nao disparar rollback espurio depois.
+        if in_flight:
+            self._fav_watchdog.start()
+        else:
+            self._fav_watchdog.stop()
+
+    def _on_favorite_watchdog_fired(self) -> None:
+        """Disparado quando o request in-flight nao resolve dentro do prazo.
+
+        Cenario de falha silenciosa (source.md secao 9): o callback de autosave
+        nunca retornou (UI-thread travada, lock prolongado no SQLite). Sem este
+        watchdog a estrela ficaria desabilitada para sempre. Forca o rollback ao
+        valor persistido, re-habilita a estrela e loga um erro explicito.
+        """
+        # Guard de idempotencia: se o request ja resolveu, o watchdog foi
+        # parado; este metodo so executa enquanto ainda ha lockout ativo.
+        if not self._fav_in_flight:
+            return
+        _log.error(
+            "favorito.autosave_watchdog_timeout: request in-flight nao resolveu "
+            "em %d ms; forcando rollback da estrela (task_id=%s)",
+            _STAR_IN_FLIGHT_WATCHDOG_MS,
+            self._task.id,
+        )
+        self._rollback_star()
+
+    def _on_star_toggled(self, checked: bool) -> None:
+        # Guard de reentrancia: o rollback usa QSignalBlocker, mas o guard
+        # protege qualquer caminho futuro que altere o checked sem bloquear sinal.
+        if self._fav_syncing:
+            return
+        # Lockout in-flight (source.md AC-14): se o request ja foi despachado,
+        # nao aceita novo toggle ate resolver. O setEnabled(False) ja recusa
+        # cliques, mas o guard protege caminhos programaticos.
+        if self._fav_in_flight:
+            return
+        self._fav_pending_value = checked
+        self._refresh_star_icon()
+        self._set_star_pending(True)
+        # Debounce: cliques rapidos sucessivos colapsam num unico autosave.
+        self._fav_debounce.start()
+
+    def _on_favorite_debounce_fired(self) -> None:
+        # Request despachado: trava a estrela ate resolver (source.md AC-14).
+        self._set_star_in_flight(True)
+        cb = self._callbacks.get("on_favorite_toggle")
+        if cb is None:
+            # Sem callback conectado (ex.: card isolado em teste): nao ha como
+            # persistir — reverte para o valor da task e sai do estado pending.
+            self._rollback_star()
+            return
+        ok = cb(self._task, self._fav_pending_value)
+        if ok:
+            # Sucesso: o controller dispara task_list.refresh(), que destroi e
+            # recria todos os cards. Este card esta agendado para deleteLater —
+            # nao tocar em mais nada para evitar acesso a widget ja deletado.
+            return
+        # Falha: o refresh nao aconteceu e o card sobrevive. Rollback visual
+        # para o estado persistido, sem autosave silencioso (source.md rejeicao #10).
+        self._rollback_star()
+
+    def _rollback_star(self) -> None:
+        """Reverte a estrela ao valor persistido da task, sem disparar autosave."""
+        self._fav_syncing = True
+        try:
+            with QSignalBlocker(self._star_btn):
+                self._star_btn.setChecked(self._task.favorito)
+        finally:
+            self._fav_syncing = False
+        self._fav_pending_value = self._task.favorito
+        self._refresh_star_icon()
+        self._set_star_pending(False)
+        # Request resolveu (rollback/erro): destrava a estrela para novos
+        # toggles e restaura o foco de teclado (source.md AC-14).
+        self._set_star_in_flight(False)
+
     def _apply_card_style(self) -> None:
         state = self._card_state()
         style = _CARD_STYLE[state]
         selected_border = "border-left: 3px solid #FFFFFF;" if self._selected else ""
+        # Task permanente: borda azul redundante ao badge "PERM" (source.md
+        # rejeicao #9). A borda esquerda preserva os 7px de espessura.
+        if self._task.permanente:
+            outer_border = f"border: 2px solid {PERMANENT_ACCENT};"
+            left_border = f"border-left: 7px solid {PERMANENT_ACCENT};"
+        else:
+            outer_border = "border: 1px solid rgba(255,255,255,0.09);"
+            left_border = f"border-left: 7px solid {style['accent']};"
         self.setStyleSheet(
             "QFrame#taskCard { /* legacy-border #3F3F46 */"
             f"background: {style['bg']};"
-            "border: 1px solid rgba(255,255,255,0.09);"
-            f"border-left: 7px solid {style['accent']};"
+            f"{outer_border}"
+            f"{left_border}"
             f"{selected_border}"
             "border-radius: 12px;"
             "}"
@@ -290,13 +517,22 @@ class TaskCard(QFrame):
         )
         self._id_label.setStyleSheet(
             f"font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace; font-size: 12px; "
-            f"font-weight: 800; color: {style['chip_text']}; background: {style['chip_bg']}; "
-            "border-radius: 7px; padding: 1px 7px;"
+            f"font-weight: 800; color: {style['meta']}; background: transparent; "
+            "padding: 0;"
         )
         title_legacy_marker = " /* #A1A1AA */" if state == "blocked" else ""
-        self._title_label.setStyleSheet(
+        _title_css = (
             f"font-size: 12px; font-weight: 600; color: {style['title']}; "
             f"background: transparent;{title_legacy_marker}"
+        )
+        self._title_label.setStyleSheet(_title_css)
+        self._title_edit.setStyleSheet(
+            f"QLineEdit#cardTitleEdit {{"
+            f"font-size: 12px; font-weight: 600; color: {style['title']};"
+            f"background: transparent;"
+            f"border: none; border-bottom: 1px solid rgba(255,255,255,0.35);"
+            f"padding: 0; margin: 0;"
+            f"}}"
         )
         open_deps = count_open_deps(self._task.deps, self._all_tasks)
         deps_color = "#EAB308" if open_deps > 0 else "#71717A"
@@ -305,6 +541,35 @@ class TaskCard(QFrame):
             f"font-weight: 700; color: {deps_color}; background: transparent;"
         )
         self._seg_ctrl.apply_palette(state, style)
+
+    def _begin_inline_edit(self) -> None:
+        self._title_edit.setText(self._task.title)
+        self._title_label.hide()
+        self._title_edit.show()
+        self._title_edit.setFocus(Qt.FocusReason.MouseFocusReason)
+        self._title_edit.selectAll()
+
+    def _commit_inline_edit(self) -> None:
+        if self._title_edit.isHidden():
+            return
+        new_title = self._title_edit.text().strip()
+        self._title_edit.hide()
+        self._title_label.show()
+        if new_title and new_title != self._task.title:
+            cb = self._callbacks.get("on_title_save")
+            if cb:
+                cb(self._task, new_title)
+
+    def _cancel_inline_edit(self) -> None:
+        self._title_edit.hide()
+        self._title_label.show()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # type: ignore[override]
+        if watched is self._title_edit and event.type() == QEvent.Type.KeyPress:
+            if event.key() == Qt.Key.Key_Escape:  # type: ignore[attr-defined]
+                self._cancel_inline_edit()
+                return True
+        return super().eventFilter(watched, event)
 
     def _set_hover_actions_visible(self, visible: bool) -> None:
         self._actions_row.setVisible(visible)
@@ -395,7 +660,20 @@ class TaskCard(QFrame):
         self._edit_btn.setAccessibleName(f"Editar task {task.id}")
         self._delete_btn.setProperty("testid", f"task-card-{task.id}-delete")
         self._delete_btn.setAccessibleName(f"Excluir task {task.id}")
-        self._id_label.setText(task.id)
+        self._title_edit.setProperty("testid", f"task-card-{task.id}-title-edit")
+        self._star_btn.setProperty("testid", f"task-card-{task.id}-favorito")
+        self._perm_badge.setProperty("testid", f"task-card-{task.id}-permanente-badge")
+        self._id_label.setText(f"#{task.id}")
+        # Re-sincroniza a estrela com a task recarregada sem disparar autosave
+        # e cancela qualquer debounce/lockout pendente do estado anterior.
+        self._fav_debounce.stop()
+        self._fav_pending_value = task.favorito
+        with QSignalBlocker(self._star_btn):
+            self._star_btn.setChecked(task.favorito)
+        self._refresh_star_icon()
+        self._set_star_pending(False)
+        self._set_star_in_flight(False)
+        self._perm_badge.setVisible(task.permanente)
         self._refresh_text_content()
         self._seg_ctrl.update_task(task, self._all_tasks)
         self._apply_card_style()

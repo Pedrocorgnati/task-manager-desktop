@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
@@ -29,19 +30,36 @@ from PySide6.QtWidgets import (
 
 from task_manager_desktop.core.filters import ALL_TASK_TYPES, is_active, matches
 from task_manager_desktop.core.models import Sector, Task, TaskType
-from task_manager_desktop.core.sector import compute_sector, count_open_deps
+from task_manager_desktop.core.sector import (
+    PERMANENT_ACCENT,
+    compute_sector,
+    count_open_deps,
+)
 from task_manager_desktop.ui.theme import PALETTE, SPLITTER_SIZES
 
 if TYPE_CHECKING:
     from task_manager_desktop.repositories.task_repository import TaskRepository
 
-_SECTOR_ORDER = [Sector.ACTIVE, Sector.WAITING, Sector.BLOCKED, Sector.DONE]
+_log = logging.getLogger(__name__)
+
+# Ordem canonica de renderizacao dos setores. Explicita e com Sector.PERMANENT
+# por ultimo (source.md secao 3.6). `_SECTOR_ORDER` e mantido como alias para
+# nao quebrar referencias internas.
+RENDER_ORDER: list[Sector] = [
+    Sector.ACTIVE,
+    Sector.WAITING,
+    Sector.BLOCKED,
+    Sector.DONE,
+    Sector.PERMANENT,
+]
+_SECTOR_ORDER = RENDER_ORDER
 
 _SECTOR_LABELS = {
     Sector.ACTIVE: "Em execução",
     Sector.WAITING: "Fila",
     Sector.BLOCKED: "Bloqueadas",
     Sector.DONE: "Concluídas",
+    Sector.PERMANENT: "Permanentes",
 }
 
 _ROLE_TYPE = Qt.ItemDataRole.UserRole + 1  # "separator" | "task" | "placeholder"
@@ -53,12 +71,35 @@ _SECTOR_COLORS = {
     Sector.WAITING: "#EAB308",
     Sector.BLOCKED: "#A1A1AA",
     Sector.DONE: "#686C78",
+    Sector.PERMANENT: PERMANENT_ACCENT,
 }
+
+
+def sort_sector_tasks(tasks: list[Task]) -> list[Task]:
+    """Ordem determinista das tasks de um setor.
+
+    Funcao pura: `(favorito DESC, order_index ASC, id ASC)` (source.md AC-13).
+    Favoritos ficam no topo; o `id` como ultimo criterio garante que duas
+    execucoes sobre a mesma entrada produzam exatamente a mesma ordem.
+    """
+    return sorted(tasks, key=lambda t: (not t.favorito, t.order_index, t.id))
+
+
+def is_cross_block_drop(reordered_favorito_flags: list[bool]) -> bool:
+    """True se a ordem resultante interleava favoritos e nao-favoritos.
+
+    Funcao pura. Dentro de um setor os favoritos formam um bloco contiguo no
+    topo; um drop que coloque um nao-favorito antes de um favorito (ou vice
+    versa) cruza a fronteira do bloco e e invalido (source.md AC-8). A ordem
+    valida e sempre `[True...False...]`, i.e. igual a ela mesma ordenada
+    decrescente.
+    """
+    return reordered_favorito_flags != sorted(reordered_favorito_flags, reverse=True)
 
 
 def _task_sector(task: Task, all_tasks: dict[str, Task]) -> Sector:
     has_open = count_open_deps(task.deps, all_tasks) > 0
-    sector, _ = compute_sector(task.status, has_open)
+    sector, _ = compute_sector(task.status, has_open, task.permanente)
     return sector
 
 
@@ -74,8 +115,7 @@ class _InnerList(QListWidget):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setObjectName("taskListWidget")
         self.setProperty("testid", "task-list-widget")
-        # Gap entre cards: 1/3 do valor anterior (3 -> 1).
-        self.setSpacing(1)
+        self.setSpacing(5)
 
     # ------------------------------------------------------------------
     # Keyboard navigation — belt-and-suspenders (window shortcuts primary)
@@ -112,6 +152,13 @@ class _InnerList(QListWidget):
     def _task_id_at(self, row: int) -> str:
         item = self.item(row)
         return item.data(_ROLE_TASK_ID) if item else ""
+
+    def _task_favorito(self, task_id: str) -> bool:
+        """Flag favorito da task pelo id, consultando o cache do outer widget."""
+        for task in self._outer._tasks:
+            if task.id == task_id:
+                return bool(task.favorito)
+        return False
 
     def _sector_for_row(self, row: int) -> int:
         """Walk backwards to find the separator enclosing this row."""
@@ -196,6 +243,38 @@ class _InnerList(QListWidget):
 
         orig_ids = [self._task_id_at(r) for r in self._task_rows_in_sector(source_sector)]
         ordered_ids = self._reordered_sector_ids(source_sector, source_id, drop_y)
+
+        # Drop invalido: dentro de um setor favoritos formam um bloco contiguo
+        # no topo. Mover um card para dentro do outro bloco quebra a ordenacao
+        # determinista (favorito DESC) e e rejeitado (source.md AC-8).
+        fav_flags = [self._task_favorito(tid) for tid in ordered_ids]
+        if is_cross_block_drop(fav_flags):
+            # Bloco = lado favorito/nao-favorito da fronteira que o DnD nao pode
+            # cruzar. `from_block` deriva do card arrastado; `to_block` e o bloco
+            # oposto, alvo do drop rejeitado (source.md secao 1.6 e secao 9).
+            from_block = "favorito" if self._task_favorito(source_id) else "nao-favorito"
+            to_block = "nao-favorito" if from_block == "favorito" else "favorito"
+            # Evento estruturado (source.md secao 9): payload key-value consistente
+            # com os demais eventos de observabilidade, em vez de string crua. Os
+            # tres campos exigidos (task_id, from_block, to_block) vao tanto no
+            # `extra=` (consumo por handlers estruturados) quanto interpolados na
+            # mensagem (legibilidade em handlers de texto puro). Debug, sem toast.
+            _log.debug(
+                "dnd.drop_rejected event=dnd.drop_rejected reason=cross-block "
+                "task_id=%s from_block=%s to_block=%s",
+                source_id,
+                from_block,
+                to_block,
+                extra={
+                    "event": "dnd.drop_rejected",
+                    "reason": "cross-block",
+                    "task_id": source_id,
+                    "from_block": from_block,
+                    "to_block": to_block,
+                },
+            )
+            event.ignore()
+            return
 
         event.acceptProposedAction()
 
@@ -287,7 +366,7 @@ class TaskList(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setProperty("testid", "task-list-container")
-        self.setFixedWidth(int(SPLITTER_SIZES[0] * 0.9))
+        self.setFixedWidth(int(SPLITTER_SIZES[0]))
         self._callbacks: dict[str, Any] = {}
         self._tasks: list[Task] = []
         self._cards: list[Any] = []
@@ -349,8 +428,12 @@ class TaskList(QWidget):
         while self._header_layout.count():
             item = self._header_layout.takeAt(0)
             old = item.widget()
-            if old is not None:
+            if old is not None and old is not widget:
+                # setParent(None) apenas desancora; o widget orfao continuaria
+                # vivo com suas conexoes de sinal. deleteLater() agenda a
+                # destruicao real e libera essas conexoes (Qt resource leak).
                 old.setParent(None)
+                old.deleteLater()
         widget.setParent(self._header_host)
         self._header_layout.addWidget(widget)
 
@@ -529,13 +612,18 @@ class TaskList(QWidget):
         groups: dict[Sector, list[Task]] = {s: [] for s in _SECTOR_ORDER}
         for task in visible_tasks:
             groups[_task_sector(task, all_tasks)].append(task)
-        # Sort each sector by order_index
-        for sector_tasks in groups.values():
-            sector_tasks.sort(key=lambda t: t.order_index)
+        # Ordem determinista por setor: favorito DESC, order_index ASC, id ASC.
+        for sector_key in groups:
+            groups[sector_key] = sort_sector_tasks(groups[sector_key])
 
         for sector in _SECTOR_ORDER:
             sector_tasks = groups[sector]
             if filter_active and not sector_tasks:
+                continue
+            # O setor Permanentes nao e um setor-base sempre visivel: so
+            # aparece quando ha tasks permanentes concluidas. Um header
+            # "Permanentes" vazio seria ruido (source.md secao 3.6).
+            if sector == Sector.PERMANENT and not sector_tasks:
                 continue
             self._add_separator(sector)
             if not sector_tasks:
@@ -602,10 +690,13 @@ class TaskList(QWidget):
             | Qt.ItemFlag.ItemIsDragEnabled
             | Qt.ItemFlag.ItemIsDropEnabled
         )
-        item.setSizeHint(QSize(1, 120))
         self._inner.addItem(item)
 
         card = TaskCard(task, self._callbacks, all_tasks_list, self._inner)
         card.selected.connect(self.task_selected.emit)
+        # Mantem a altura do item alinhada ao card real para evitar "gaps"
+        # visuais grandes entre cards. O espacamento entre itens fica sob
+        # controle exclusivo do QListWidget.setSpacing(5).
+        item.setSizeHint(QSize(1, card.sizeHint().height()))
         self._inner.setItemWidget(item, card)
         self._cards.append(card)

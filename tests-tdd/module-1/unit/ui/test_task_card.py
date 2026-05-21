@@ -1,5 +1,6 @@
 # suite: unit | module: module-1-gestao-de-tasks | task: TASK-2
-# @tdd-locked: do not edit without /tdd:unlock
+# @tdd-unlocked: feature favorito/permanente — id-label do TaskCard agora e
+#   prefixado com '#' (source.md §3.6) para distincao visual do identificador.
 # covers: TASK-2/ST002 — TaskCard renderizacao, menu, signal, border, anti-XSS
 # target: task_manager_desktop/ui/task_card.py
 # TIDs: TID-1-2-012, TID-1-2-013, TID-1-2-014, TID-1-2-015, TID-1-2-016
@@ -32,8 +33,8 @@ def test_task_card_renders_three_rows_meta_title_status(qtbot):
     card = TaskCard(task, _CBS, [task])
     qtbot.addWidget(card)
 
-    # meta-row elements
-    assert card._id_label.text() == "abc"
+    # meta-row elements — id-label e prefixado com '#'
+    assert card._id_label.text() == "#abc"
     assert card._seg_ctrl is not None
     assert card._menu_btn is not None
 

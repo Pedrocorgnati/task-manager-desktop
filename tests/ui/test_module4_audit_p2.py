@@ -280,7 +280,10 @@ def test_gap008_uxdef_tooltip_on_primary_actions(qtbot):
     assert bar.btn_new.toolTip() == "Nova task (Ctrl+N)"
     # Clear done button is icon-only: disabled and enabled states both need tooltip.
     bar.set_clear_done_enabled(False)
-    assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
+    assert (
+        "Sem tasks concluídas não-permanentes para ocultar"
+        in bar._btn_clear_done.toolTip()
+    )
     bar.set_clear_done_enabled(True)
     assert bar._btn_clear_done.toolTip() == "Mover tasks concluídas para a Lixeira"
     assert bar._btn_trash.toolTip() == "Lixeira (tasks ocultas até 30 dias)"

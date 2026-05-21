@@ -171,7 +171,6 @@ def test_controller_suppresses_destructive_when_focus_is_text(qtbot):
     win.setCentralWidget(editor)
     win.show()
     qtbot.waitExposed(win)
-    editor.setFocus()
 
     called: list[str] = []
     sc = ShortcutsController(
@@ -183,9 +182,11 @@ def test_controller_suppresses_destructive_when_focus_is_text(qtbot):
     )
     sc.install()
 
-    # Force focus to editor
+    # Wait for the focus grant to actually land instead of an arbitrary sleep —
+    # the X-less offscreen platform may defer focus delivery; an arbitrary
+    # qtbot.wait() races with that grant and flakes under random suite ordering.
     editor.setFocus()
-    qtbot.wait(20)
+    qtbot.waitUntil(editor.hasFocus, timeout=1000)
 
     for s in sc._shortcuts:
         if s.key() == QKeySequence("Delete"):
@@ -217,7 +218,12 @@ def test_qlineedit_focus_also_suppresses_destructive(qtbot):
     win.setCentralWidget(le)
     win.show()
     qtbot.waitExposed(win)
+
+    # Wait for the focus grant to actually land before installing the
+    # controller — an arbitrary qtbot.wait() races the offscreen focus
+    # delivery and flakes under random suite ordering.
     le.setFocus()
+    qtbot.waitUntil(le.hasFocus, timeout=1000)
 
     called: list[str] = []
     sc = ShortcutsController(
@@ -225,7 +231,6 @@ def test_qlineedit_focus_also_suppresses_destructive(qtbot):
         {"delete_selected": lambda: called.append("delete")},
     )
     sc.install()
-    qtbot.wait(20)
 
     for s in sc._shortcuts:
         if s.key() == QKeySequence("Delete"):
@@ -244,7 +249,12 @@ def test_terminal_focus_suppresses_contextual_shortcuts(qtbot):
     win.setCentralWidget(terminal)
     win.show()
     qtbot.waitExposed(win)
+
+    # Wait for the focus grant to actually land before installing the
+    # controller — an arbitrary qtbot.wait() races the offscreen focus
+    # delivery and flakes under random suite ordering.
     terminal.setFocus()
+    qtbot.waitUntil(terminal.hasFocus, timeout=1000)
 
     called: list[str] = []
     sc = ShortcutsController(
@@ -255,7 +265,6 @@ def test_terminal_focus_suppresses_contextual_shortcuts(qtbot):
         },
     )
     sc.install()
-    qtbot.wait(20)
 
     for s in sc._shortcuts:
         if s.key() in {QKeySequence("Return"), QKeySequence("Enter")}:

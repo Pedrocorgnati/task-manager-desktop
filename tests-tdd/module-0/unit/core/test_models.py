@@ -1,4 +1,5 @@
-# @tdd-locked: do not edit without /tdd:unlock
+# @tdd-unlocked: feature favorito/permanente (source.md §3.2) adicionou o setor
+#   PERMANENT e desacoplou Color de Sector — contrato canonico atualizado.
 # Suite: unit | Module: module-0-foundations | Task: TASK-2
 # TIDs: TID-0-2-001, TID-0-2-002, TID-0-2-003, TID-0-2-004, TID-0-2-005, TID-0-2-006, TID-0-2-007, TID-0-2-008, TID-0-2-009
 import pytest
@@ -47,17 +48,23 @@ class TestTaskTypeEnum:
 class TestSectorEnum:
     """TID-0-2-005 | covers: TASK-2/ST001 + OVERVIEW Contratos + ARCHITECTURE | suite: unit"""
 
-    def test_sector_enum_tem_6_zonas_canonicas(self):
-        # compute_sector mapeia (status x has_open_deps) -> 4 combinacoes distintas;
-        # Sector define as zonas: ACTIVE, WAITING, BLOCKED, DONE
-        expected = {"ACTIVE", "WAITING", "BLOCKED", "DONE"}
+    def test_sector_enum_tem_5_zonas_canonicas(self):
+        # Sector define as zonas: ACTIVE, WAITING, BLOCKED, DONE, PERMANENT.
+        # PERMANENT (source.md §3.2) e o 5o setor introduzido pela feature
+        # favorito/permanente para tasks DONE marcadas como permanentes.
+        expected = {"ACTIVE", "WAITING", "BLOCKED", "DONE", "PERMANENT"}
         assert {s.name for s in Sector} == expected
+        assert len(Sector) == 5
 
 
 class TestColorEnum:
     """TID-0-2-006 | covers: TASK-2/ST001 + OVERVIEW Contratos | suite: unit"""
 
-    def test_color_enum_cardinalidade_igual_a_sector(self):
-        assert len(Color) == len(Sector)
+    def test_color_enum_tem_4_membros_base(self):
+        # A feature favorito/permanente desacoplou Color de Sector: compute_sector
+        # retorna tuple[Sector, str] e o setor PERMANENT usa um accent hex dedicado
+        # (PERMANENT_ACCENT), nao um membro de Color. Color mantem as 4 cores base.
+        assert {c.name for c in Color} == {"GREEN", "YELLOW", "GRAY", "NEUTRAL"}
+        assert len(Color) == 4
 
 

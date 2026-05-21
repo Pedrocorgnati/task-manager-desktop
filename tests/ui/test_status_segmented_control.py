@@ -84,8 +84,8 @@ def test_status_control_uses_vertical_black_rail_and_colored_dots(qtbot):
     assert "#EAB308" in w.btn_p.styleSheet()
     assert "#16A34A" in w.btn_ip.styleSheet()
     assert "#71717A" in w.btn_d.styleSheet()
-    # Borda preta a esquerda separa os 3 botoes do resto do card.
-    assert "#000000" in w.btn_p.styleSheet()
+    # Sem borda preta lateral (layout atualizado).
+    assert "#000000" not in w.btn_p.styleSheet()
     # Botao selecionado recebe borda branca.
     assert "2px solid #FFFFFF" in w.btn_ip.styleSheet()
 

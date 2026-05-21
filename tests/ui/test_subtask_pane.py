@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt
 from task_manager_desktop.core.db import run_migrations
 from task_manager_desktop.core.models import Subtask, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
+from task_manager_desktop.ui import subtask_pane as subtask_pane_mod
 from task_manager_desktop.ui.subtask_pane import SubtaskPane
 
 
@@ -120,6 +121,77 @@ def test_subtask_inline_edit_autosaves_on_finish(qtbot, repo):
     assert repo.list_subtasks("a")[0].text == "alterado"
 
 
+def test_subtask_inline_edit_reverts_on_persist_failure(qtbot, repo, caplog):
+    """Hardening: se a persistencia do texto inline falha, o texto e revertido
+    visualmente (model + label) e o erro e logado com o subtask id — nada de
+    data loss silenciosa (RAW execute sem tratamento de erro)."""
+    import logging
+
+    task = Task(id="a", title="A")
+    repo.create(task)
+    repo.create_subtask(Subtask(id="a0", task_id="a", text="original", state=0))
+    pane = SubtaskPane(repo)
+    qtbot.addWidget(pane)
+    pane.set_task(task)
+
+    # Faz o metodo do repositorio falhar como se houvesse erro de I/O.
+    def _boom(_subtask_id, _text):
+        raise sqlite3.OperationalError("disk I/O error")
+
+    repo.update_subtask_text = _boom  # type: ignore[method-assign]
+
+    row = pane._list.itemWidget(pane._list.item(0))
+    row._begin_inline_edit()
+    row._inline_edit.setText("alterado")
+
+    with caplog.at_level(logging.ERROR, logger="task_manager_desktop.ui.subtask_pane"):
+        row._commit_inline_edit()
+
+    # Texto revertido no modelo e no label — sem perda silenciosa.
+    assert row._subtask.text == "original"
+    assert row.label.text() == "original"
+
+    # Erro logado com o subtask id.
+    failure_logs = [
+        rec.getMessage()
+        for rec in caplog.records
+        if "inline_edit_persist_failed" in rec.getMessage()
+    ]
+    assert len(failure_logs) == 1
+    assert "subtask_id=a0" in failure_logs[0]
+
+    # Indicacao de erro discreta: borda vermelha temporaria no card.
+    assert "#EF4444" in row._card.styleSheet()
+
+
+def test_subtask_inline_edit_uses_repository_method(qtbot, repo):
+    """Hardening: o commit inline persiste via repo.update_subtask_text
+    (metodo do repositorio), nao via RAW repo._conn.execute."""
+    task = Task(id="a", title="A")
+    repo.create(task)
+    repo.create_subtask(Subtask(id="a0", task_id="a", text="original", state=0))
+    pane = SubtaskPane(repo)
+    qtbot.addWidget(pane)
+    pane.set_task(task)
+
+    calls: list[tuple[str, str]] = []
+    orig = repo.update_subtask_text
+
+    def _spy(subtask_id, text):
+        calls.append((subtask_id, text))
+        return orig(subtask_id, text)
+
+    repo.update_subtask_text = _spy  # type: ignore[method-assign]
+
+    row = pane._list.itemWidget(pane._list.item(0))
+    row._begin_inline_edit()
+    row._inline_edit.setText("via repo")
+    row._commit_inline_edit()
+
+    assert calls == [("a0", "via repo")]
+    assert repo.list_subtasks("a")[0].text == "via repo"
+
+
 def test_subtask_pane_width_is_stable_with_or_without_subtasks(qtbot, repo):
     empty_task = Task(id="empty", title="Empty")
     filled_task = Task(id="filled", title="Filled")
@@ -173,3 +245,60 @@ def test_subtask_card_width_is_reduced_inside_fixed_pane(qtbot, repo):
     assert row._card.width() == row._card.minimumWidth()
     assert row._card.maximumWidth() == row._card.minimumWidth()
     assert row._card.width() < pane.width()
+
+
+def test_long_subtask_sizehint_grows_and_survives_inline_edit(qtbot, repo):
+    """AC-5: subtask >300 chars nao trunca antes nem depois da edicao inline."""
+    task = Task(id="a", title="A")
+    repo.create(task)
+    repo.create_subtask(Subtask(id="a0", task_id="a", text="curto", state=0))
+    pane = SubtaskPane(repo)
+    qtbot.addWidget(pane)
+    pane.set_task(task)
+
+    long_text = ("palavra " * 45).strip()
+    assert len(long_text) > 300
+
+    item = pane._list.item(0)
+    short_height = item.sizeHint().height()
+
+    # antes da edicao: a medicao do texto longo ja deve exceder a do texto curto
+    assert pane._measure_subtask_text_height(long_text) > pane._measure_subtask_text_height(
+        "curto"
+    )
+
+    row = pane._list.itemWidget(item)
+    row._begin_inline_edit()
+    row._inline_edit.setText(long_text)
+    row._commit_inline_edit()
+
+    # depois da edicao: sizeHint recalculado cresceu e o texto persistiu integro
+    grown_height = item.sizeHint().height()
+    assert grown_height > short_height
+    assert repo.list_subtasks("a")[0].text == long_text
+    assert grown_height >= pane._measure_subtask_text_height(long_text)
+
+
+def test_subtask_row_height_falls_back_without_qapplication(qtbot, repo, monkeypatch):
+    """AC-5 ponto 3: sem QApplication ativa, altura cai para a constante documentada."""
+    task = Task(id="a", title="A")
+    repo.create(task)
+    repo.create_subtask(Subtask(id="a0", task_id="a", text="A0", state=0))
+    pane = SubtaskPane(repo)
+    qtbot.addWidget(pane)
+    pane.set_task(task)
+
+    long_text = ("palavra " * 45).strip()
+    monkeypatch.setattr(
+        subtask_pane_mod.QApplication, "instance", staticmethod(lambda: None)
+    )
+
+    assert (
+        pane._measure_subtask_text_height(long_text)
+        == subtask_pane_mod.SUBTASK_FALLBACK_HEIGHT
+    )
+    assert (
+        pane._row_height(long_text)
+        == subtask_pane_mod.SUBTASK_FALLBACK_HEIGHT
+        + subtask_pane_mod._SUBTASK_ROW_VPADDING
+    )

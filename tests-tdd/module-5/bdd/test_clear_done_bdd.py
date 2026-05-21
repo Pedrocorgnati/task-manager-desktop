@@ -74,7 +74,10 @@ if HAS_BDD:
 
     @then("the tooltip should say 'Nenhuma task concluída visível'")
     def tooltip_disabled(header_bar_instance):
-        assert "Nenhuma task concluída visível" in header_bar_instance._btn_clear_done.toolTip()
+        assert (
+            "Sem tasks concluídas não-permanentes para ocultar"
+            in header_bar_instance._btn_clear_done.toolTip()
+        )
 
     @then("the tooltip should say 'Ocultar tasks concluídas'")
     def tooltip_enabled(header_bar_instance):
@@ -96,7 +99,10 @@ class TestClearDoneButton:
         bar = HeaderBar()
         qtbot.addWidget(bar)
         assert not bar._btn_clear_done.isEnabled()
-        assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
+        assert (
+            bar._btn_clear_done.toolTip()
+            == "Sem tasks concluídas não-permanentes para ocultar"
+        )
 
     def test_button_enabled_when_has_done(self, qtbot):
         """Scenario: Button enabled when has visible done tasks."""
@@ -114,7 +120,10 @@ class TestClearDoneButton:
         bar.set_clear_done_enabled(True)
         bar.set_clear_done_enabled(False)
         assert not bar._btn_clear_done.isEnabled()
-        assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
+        assert (
+            bar._btn_clear_done.toolTip()
+            == "Sem tasks concluídas não-permanentes para ocultar"
+        )
 
     def test_clicking_button_emits_signal(self, qtbot):
         """Scenario: Clicking button emits clear_completed_clicked signal."""

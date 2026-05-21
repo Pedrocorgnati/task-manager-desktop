@@ -12,6 +12,8 @@ def test_schema_v1_creates_tasks_table(in_memory_db):
     expected = {
         "id", "title", "status", "type", "deps", "notes",
         "order_index", "created_at", "completed_at", "hidden_at",
+        # v7: campos favorito/permanente + updated_at (touch em update_*)
+        "favorito", "permanente", "updated_at",
     }
     assert expected == columns
 
@@ -37,7 +39,7 @@ def test_migration_is_idempotent(in_memory_db):
     run_migrations(in_memory_db)
     run_migrations(in_memory_db)
     count = in_memory_db.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-    assert count == 6
+    assert count == 7
 
 
 def test_migration_v3_converts_legacy_online_offline_values(in_memory_db):

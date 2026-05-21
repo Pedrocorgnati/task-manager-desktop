@@ -37,7 +37,7 @@ def test_renders_three_rows(qtbot, callbacks):
     qtbot.addWidget(card)
     card.show()
     # id label e titulo aparecem no card
-    assert card._id_label.text() == "abc"
+    assert card._id_label.text() == "#abc"
     assert card._title_label.text() == "Test"
 
 

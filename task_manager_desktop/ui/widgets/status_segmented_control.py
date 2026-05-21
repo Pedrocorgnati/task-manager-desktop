@@ -115,7 +115,7 @@ class StatusSegmentedControl(QWidget):
         if checked:
             border = "border: 2px solid #FFFFFF;"
         else:
-            border = "border: none; border-left: 2px solid #000000;"
+            border = "border: none;"
 
         return (
             "QPushButton {"

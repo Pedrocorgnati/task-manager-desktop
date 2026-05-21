@@ -3,11 +3,16 @@ from __future__ import annotations
 import os
 
 import pytest
-from PySide6.QtCore import QCoreApplication, QSettings, QSize
+from PySide6.QtCore import QByteArray, QCoreApplication, QSettings, QSize
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import QLabel, QSplitter
 
-from task_manager_desktop.ui.main_window import MainWindowShell
+from task_manager_desktop.ui.main_window import (
+    _SETTINGS_GEOMETRY,
+    _SETTINGS_SPLITTER,
+    _SETTINGS_STATE,
+    MainWindowShell,
+)
 from task_manager_desktop.ui.subtask_pane import SubtaskPane
 
 
@@ -105,11 +110,72 @@ def test_subtask_pane_collapses_to_toggle_width_plus_lateral_padding(qtbot):
     assert abs(sizes[1] - pane.collapsed_width()) <= 2
 
 
+def test_qsettings_persistence_via_settings_layer(qtbot):
+    """Geometry/state/splitter persistence — testado pela camada QSettings,
+    sem depender de um compositor real.
+
+    O teste antigo (test_qsettings_persistence, agora abaixo) afirmava
+    `w2.size() == QSize(1600,1000)`, o que exige um compositor: offscreen,
+    `restoreGeometry()` reajusta a geometria contra a tela (indefinida) e
+    descarta o tamanho exato. Por isso ele ficava `skipif(offscreen)` e o CI
+    headless nunca exercitava a persistencia.
+
+    Este teste cobre o contrato real e determinístico:
+      (1) closeEvent GRAVA os tres blobs (geometry/state/splitter) em QSettings;
+      (2) uma nova janela LE e APLICA esses blobs via _restore_settings sem erro;
+      (3) a PROPORCAO do splitter e preservada (proporcoes fazem round-trip
+          offscreen; apenas pixels absolutos nao).
+    """
+    w1 = MainWindowShell()
+    qtbot.addWidget(w1)
+    w1.show()
+    qtbot.waitExposed(w1)
+    # Razao deliberadamente assimetrica (~58/12/30%) — distinta dos defaults
+    # 35/15/50 — para provar que a proporcao restaurada veio do QSettings.
+    w1._splitter.setSizes([580, 120, 300])
+    ratio_before = [s / sum(w1._splitter.sizes()) for s in w1._splitter.sizes()]
+    w1.close()
+
+    # (1) closeEvent persistiu os tres blobs.
+    geometry_blob = QSettings().value(_SETTINGS_GEOMETRY)
+    state_blob = QSettings().value(_SETTINGS_STATE)
+    splitter_blob = QSettings().value(_SETTINGS_SPLITTER)
+    for name, blob in (
+        ("geometry", geometry_blob),
+        ("state", state_blob),
+        ("splitter", splitter_blob),
+    ):
+        assert isinstance(blob, (bytes, bytearray, QByteArray)), (
+            f"closeEvent nao persistiu '{name}' em QSettings"
+        )
+        assert len(QByteArray(blob)) > 0, f"blob '{name}' persistido vazio"
+
+    # (2) + (3) nova janela le e aplica os blobs; proporcao do splitter sobrevive.
+    w2 = MainWindowShell()
+    qtbot.addWidget(w2)
+    w2.show()
+    qtbot.waitExposed(w2)
+    ratio_after = [s / sum(w2._splitter.sizes()) for s in w2._splitter.sizes()]
+    for i, (before, after) in enumerate(zip(ratio_before, ratio_after)):
+        assert abs(before - after) < 0.04, (
+            f"proporcao do painel {i} nao foi restaurada: "
+            f"{before:.3f} -> {after:.3f}"
+        )
+
+
 @pytest.mark.skipif(
     os.environ.get("QT_QPA_PLATFORM") == "offscreen",
-    reason="Geometry persistence requer display real (resize nao e aplicado em offscreen)",
+    reason=(
+        "Afirma o tamanho EXATO da janela (1600x1000) apos round-trip "
+        "saveGeometry/restoreGeometry. Offscreen, restoreGeometry() reajusta a "
+        "geometria contra a tela indefinida e descarta os pixels exatos "
+        "(verificado: 1600x1000 -> 798x774). A persistencia via camada de "
+        "settings ja e coberta por test_qsettings_persistence_via_settings_layer, "
+        "que roda por padrao. Rodar este aqui: pytest com QT_QPA_PLATFORM=xcb "
+        "(ou wayland) num display real."
+    ),
 )
-def test_qsettings_persistence(qtbot):
+def test_qsettings_persistence_exact_pixels(qtbot):
     w1 = MainWindowShell()
     qtbot.addWidget(w1)
     w1.show()
@@ -149,8 +215,9 @@ def test_ctrl_q_closes_window(qtbot):
     assert sair_action is not None, "Action 'Sair' nao encontrada no menu"
     assert sair_action.shortcut() == QKeySequence("Ctrl+Q")
     sair_action.trigger()
-    qtbot.wait(100)
-    assert not w.isVisible()
+    # Aguarda o fechamento efetivar em vez de um sleep arbitrario — o trigger
+    # da action enfileira o close; um qtbot.wait() fixo corre com esse evento.
+    qtbot.waitUntil(lambda: not w.isVisible(), timeout=1000)
 
 
 def test_splitter_not_collapsible(qtbot):

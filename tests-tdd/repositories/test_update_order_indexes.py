@@ -1,5 +1,12 @@
 # suite: contract | module: module-2-setores-dependencias | task: TASK-3
-# @tdd-locked: do not edit without /tdd:unlock
+# @tdd-unlocked: 2026-05-21 (hardening round repo layer; ver source.md 05-20)
+#   Justificativa: o hardening round (fix #3) tornou update_order_indexes
+#   RENORMALIZADORA — apos aplicar os pares, os order_index de todas as tasks
+#   ativas sao reescritos para uma sequencia contigua 0..N-1 na ordem canonica
+#   (favorito DESC, order_index ASC, id ASC), eliminando buracos/colisoes. O
+#   contrato de ORDEM relativa nao muda; apenas os valores literais ficam
+#   densos. test_update_order_indexes_persists_in_single_transaction passa a
+#   verificar a ordem relativa + contiguidade em vez dos literais de entrada.
 # covers: TASK-3/ST001 — TaskRepository.update_order_indexes contrato
 # target: task_manager_desktop/repositories/task_repository.py
 # TIDs: TID-2-3-001, TID-2-3-002, TID-2-3-003
@@ -34,13 +41,14 @@ def repo_factory(tmp_path):
 
 
 def test_update_order_indexes_persists_in_single_transaction(repo_factory):
-    """update_order_indexes aplica todos os UPDATE dentro de UMA transacao atomica.
+    """update_order_indexes aplica os UPDATE numa transacao e RENORMALIZA.
 
     Given uma lista [(task_id, order_index), ...] com 3 tasks no repo
     When update_order_indexes(pairs) e chamado
-    Then todos os order_index sao persistidos
-    And a operacao acontece dentro de uma unica transacao (BEGIN/COMMIT) — verificavel
-        via spy em conn.execute ou via inspecao de in_transaction state.
+    Then a ORDEM relativa pedida pelos pares e persistida
+    And os order_index resultantes formam uma sequencia contigua 0..N-1
+        (hardening fix #3: sem buracos nem colisoes)
+    And a operacao acontece dentro de uma unica transacao.
     """
     from task_manager_desktop.core.models import Task
 
@@ -48,15 +56,17 @@ def test_update_order_indexes_persists_in_single_transaction(repo_factory):
     for tid, oi in [("t1", 10), ("t2", 20), ("t3", 30)]:
         repo.create(Task(id=tid, title=tid, order_index=oi))
 
+    # Pares pedem a ordem relativa t2 < t3 < t1.
     repo.update_order_indexes([("t1", 3), ("t2", 1), ("t3", 2)])
 
     rows = {
         r["id"]: r["order_index"]
         for r in repo._conn.execute("SELECT id, order_index FROM tasks")
     }
-    assert rows["t1"] == 3
-    assert rows["t2"] == 1
-    assert rows["t3"] == 2
+    # Renormalizacao: sequencia contigua 0..N-1 (sem buracos).
+    assert sorted(rows.values()) == [0, 1, 2]
+    # Ordem relativa pedida e preservada: t2 < t3 < t1.
+    assert rows["t2"] < rows["t3"] < rows["t1"]
 
 
 # ---------------------------------------------------------------------------

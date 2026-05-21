@@ -13,6 +13,7 @@ from task_manager_desktop.controllers._protocols import (
 )
 from task_manager_desktop.core._time import utc_naive_now
 from task_manager_desktop.core.constants import PROPAGATION_THRESHOLD
+from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.core.sector import compute_sector_change_propagation
 from task_manager_desktop.repositories.task_repository import TaskRepository
@@ -87,14 +88,38 @@ class ChangeStatusController:
             segmented.setEnabled(False)
         self._busy = True
         io_error: sqlite3.DatabaseError | None = None
+        not_found_error: TaskNotFoundError | None = None
         try:
+            # repo.update_status (apos o hardening do repositorio) levanta
+            # TaskNotFoundError quando o UPDATE afeta 0 linhas (rowcount 0) e
+            # sqlite3.IntegrityError quando afeta >1 linha (rowcount > 1).
+            # IntegrityError e subclasse de sqlite3.DatabaseError — ja coberto
+            # pelo ramo io_error.
             self._repo.update_status(task.id, new_status, _completed_dt)
+        except TaskNotFoundError as exc:
+            not_found_error = exc
         except sqlite3.DatabaseError as exc:
             io_error = exc
         finally:
             self._busy = False
             if segmented is not None:
                 segmented.setEnabled(True)
+
+        if not_found_error is not None:
+            # A task sumiu do banco (corrida / delecao concorrente). Abortar a
+            # mutacao otimista em memoria e a propagacao: tratar uma task
+            # sumida como sucesso mascararia uma escrita que nao aconteceu.
+            db_label = os.path.basename(self._repo.db_path)
+            _logger.warning(
+                "update_status abortado: task %s nao encontrada (rowcount 0)",
+                task.id,
+                extra={"task_id": task.id, "db_path": self._repo.db_path},
+            )
+            self._errors.show_io_error(str(not_found_error), db_label)
+            if segmented is not None:
+                segmented.setValue(previous_status.value)
+            self._refresh_card(task)
+            return
 
         if io_error is not None:
             db_label = os.path.basename(self._repo.db_path)

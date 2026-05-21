@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import logging
 import sys
+from typing import Any, Callable
 
 from PySide6.QtCore import QByteArray, Qt, QTimer
 from PySide6.QtGui import QFont, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
@@ -13,6 +15,115 @@ from .ui.dialogs import ErrorDialog
 from .ui.icons import APP_ICON_SVG
 from .ui.main_window import MainWindowShell
 from .ui.theme import THEME_QSS_PATH
+
+_logger = logging.getLogger(__name__)
+
+
+def _extract_broom_counts(result: Any) -> tuple[int, int]:
+    """Normaliza o retorno de ``TaskRepository.hide_all_done`` em dois contadores.
+
+    A vassoura (source.md secao 9, observabilidade) precisa de ``affected_count``
+    e ``excluded_permanente_count`` para emitir o evento estruturado
+    ``vassoura.hide_all_done``. O repositorio passou a devolver um resultado
+    estruturado carregando esses dois campos; este helper aceita as tres formas
+    possiveis sem quebrar:
+
+      1. objeto com atributos ``affected_count`` / ``excluded_permanente_count``;
+      2. dict com as mesmas chaves;
+      3. ``int`` legado (apenas a contagem de afetados) — fallback de
+         compatibilidade ate o sibling agent landar o retorno estruturado.
+
+    Nunca levanta: qualquer forma inesperada degrada para ``(0, 0)``, para que a
+    observabilidade jamais derrube a acao do usuario.
+    """
+    if result is None:
+        return 0, 0
+    # bool e subclasse de int — tratar como ausencia de dado estruturado.
+    if isinstance(result, bool):
+        return 0, 0
+    # Forma 3: int legado (apenas affected_count).
+    if isinstance(result, int):
+        return result, 0
+    # Forma 2: dict estruturado.
+    if isinstance(result, dict):
+        affected = result.get("affected_count", 0)
+        excluded = result.get("excluded_permanente_count", 0)
+    else:
+        # Forma 1: objeto estruturado.
+        affected = getattr(result, "affected_count", 0)
+        excluded = getattr(result, "excluded_permanente_count", 0)
+    try:
+        return int(affected), int(excluded)
+    except (TypeError, ValueError):
+        return 0, 0
+
+
+def _log_vassoura_hide_all_done(
+    result: Any = None,
+    *,
+    outcome: str = "ok",
+    error: Exception | None = None,
+) -> int:
+    """Emite o evento de observabilidade ``vassoura.hide_all_done`` (source.md secao 9).
+
+    Consome o retorno de ``hide_all_done`` e loga, no idioma estruturado dos
+    demais eventos da secao 9 (``extra={...}``), os dois contadores canonicos.
+    Retorna ``affected_count`` para o caller decidir se precisa refrescar a UI.
+
+    Emitido EXATAMENTE UMA VEZ por acao da vassoura — tanto no caminho de sucesso
+    (``outcome="ok"``) quanto no de erro (``outcome="error"``, com ``error``
+    populado) — espelhando o contrato dos eventos ``favorito.toggle`` /
+    ``permanente.toggle``. Zero Silencio: uma vassoura que falha nao some do log.
+    """
+    affected_count, excluded_permanente_count = _extract_broom_counts(result)
+    extra: dict[str, Any] = {
+        "event": "vassoura.hide_all_done",
+        "affected_count": affected_count,
+        "excluded_permanente_count": excluded_permanente_count,
+        "outcome": outcome,
+    }
+    if error is not None:
+        extra["error"] = repr(error)
+    _logger.info("vassoura.hide_all_done", extra=extra)
+    return affected_count
+
+
+def _perform_clear_completed(
+    repo: Any,
+    window: Any,
+    on_success: Callable[[], None],
+) -> None:
+    """Executa a vassoura ("Limpar concluidas") como seam testavel.
+
+    Chama ``repo.hide_all_done()``, emite o evento §9 ``vassoura.hide_all_done``
+    EXATAMENTE UMA VEZ (sucesso, erro de DB tratado, ou excecao inesperada antes
+    de propagar) e dispara ``on_success`` apenas no caminho de sucesso com tasks
+    efetivamente ocultas. Extraido do closure ``_on_clear_completed`` para que o
+    contrato de observabilidade §9 seja testavel sem subir a janela Qt inteira.
+    """
+    import sqlite3 as _sql
+
+    result: Any = None
+    outcome = "ok"
+    error: Exception | None = None
+    try:
+        result = repo.hide_all_done()
+    except (_sql.OperationalError, _sql.IntegrityError) as exc:
+        outcome, error = "error", exc
+        ErrorDialog.show_io_error(window, exc, repo.db_path)
+    except Exception as exc:  # noqa: BLE001 - garante o evento secao 9 antes de propagar
+        outcome, error = "error", exc
+        raise
+    finally:
+        # Observabilidade source.md secao 9: vassoura.hide_all_done e emitido
+        # EXATAMENTE UMA VEZ por acao da vassoura — sucesso, erro de DB tratado,
+        # ou excecao inesperada (emitido antes de propagar).
+        affected_count = _log_vassoura_hide_all_done(
+            result, outcome=outcome, error=error
+        )
+    # So dispara o callback de sucesso com tasks efetivamente ocultas.
+    if outcome == "ok" and affected_count > 0:
+        on_success()
 
 
 def _build_app_icon() -> QIcon:
@@ -125,7 +236,15 @@ def main() -> None:
         changed = all_tasks.get(task.id)
         if changed is not None:
             has_open = count_open_deps(changed.deps, all_tasks) > 0
-            new_sector, _ = compute_sector(changed.status, has_open)
+            # `permanente` e obrigatorio: omiti-lo renderiza uma task permanente
+            # concluida no setor DONE em vez de PERMANENT (source.md secao 3.6).
+            # getattr defende contra o estado de migracao em que o campo
+            # `permanente` ainda nao landou no modelo Task (sibling agent).
+            new_sector, _ = compute_sector(
+                changed.status,
+                has_open,
+                permanente=getattr(changed, "permanente", False),
+            )
             task_list.move_card_to_sector(task.id, new_sector.value)
         for dep_task_id, dep_sector, _ in propagated:
             task_list.move_card_to_sector(dep_task_id, dep_sector.value)
@@ -144,6 +263,8 @@ def main() -> None:
         "on_status_change": change_status_ctrl.handle,
         "on_edit": edit_ctrl.handle_edit,
         "on_delete": delete_ctrl.handle,
+        "on_title_save": edit_ctrl.handle_inline_title_edit,
+        "on_favorite_toggle": edit_ctrl.handle_favorite_toggle,
     }
     task_list.set_callbacks(callbacks)
 
@@ -151,16 +272,35 @@ def main() -> None:
     task_list.task_selected.connect(lambda task: window.select_task(task.id))
 
     def _update_clear_done_button_state() -> None:
-        """Update 'Limpar concluídas' button enabled state based on visible done tasks."""
+        """Update 'Limpar concluídas' button enabled state based on visible done tasks.
+
+        Zero Silencio: nenhuma excecao e descartada silenciosamente. Se a
+        consulta falhar, o estado seguro da vassoura e DESABILITADO — uma
+        vassoura habilitada com estado obsoleto poderia disparar uma acao sobre
+        um snapshot incoerente. A excecao e sempre logada com contexto.
+        """
+        from task_manager_desktop.core.models import Status
+
         try:
-            from task_manager_desktop.core.models import Status
             all_tasks = repo.list_active()
             has_visible_done = any(
                 task.status == Status.DONE for task in all_tasks
             )
-            header.set_clear_done_enabled(has_visible_done)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            _logger.exception(
+                "vassoura.button_state_refresh_failed: desabilitando a vassoura "
+                "(estado seguro) por falha ao consultar tasks ativas"
+            )
+            # Fallback seguro: vassoura desabilitada nunca fica obsoleta.
+            try:
+                header.set_clear_done_enabled(False)
+            except Exception:
+                _logger.exception(
+                    "vassoura.button_state_disable_failed: nao foi possivel "
+                    "forcar o estado desabilitado da vassoura"
+                )
+            return
+        header.set_clear_done_enabled(has_visible_done)
 
     def _apply_header_filters() -> None:
         task_list.set_filters(
@@ -171,16 +311,11 @@ def main() -> None:
     header.type_filter_changed.connect(lambda _types: _apply_header_filters())
 
     def _on_clear_completed() -> None:
-        import sqlite3 as _sql
-
-        try:
-            n = repo.hide_all_done()
-        except (_sql.OperationalError, _sql.IntegrityError) as exc:
-            ErrorDialog.show_io_error(window, exc, repo.db_path)
-            return
-        if n > 0:
+        def _on_success() -> None:
             task_list.refresh(repo.list_active())
             _reconcile_reader_visibility()
+
+        _perform_clear_completed(repo, window, _on_success)
 
     from .ui.dialogs.trash_dialog import TrashDialog as _TrashDialog
 
@@ -374,7 +509,13 @@ def main() -> None:
         subtask_pane.set_task(task)
         try:
             reader._viewer.setFocus(Qt.FocusReason.OtherFocusReason)
-        except Exception:  # noqa: BLE001
+        except Exception:
+            # Fallback de foco: o viewer interno pode nao existir/estar pronto.
+            # A excecao e recuperavel mas nunca descartada sem registro.
+            _logger.debug(
+                "reader._viewer.setFocus falhou; fallback para reader.setFocus",
+                exc_info=True,
+            )
             reader.setFocus(Qt.FocusReason.OtherFocusReason)
 
     task_list.task_selected.connect(_on_task_selected_for_reader)
@@ -385,8 +526,14 @@ def main() -> None:
             from .ui.toast import ToastWidget
             toast = ToastWidget(window)
             toast.show_message(msg)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            # O toast e a unica sinalizacao de "troca bloqueada"; se ele falhar
+            # nao ha como recuperar o feedback visual, mas a falha NUNCA pode
+            # passar silenciosa (Zero Silencio) — logar com a mensagem perdida.
+            _logger.exception(
+                "reader.switch_blocked: falha ao exibir toast (mensagem perdida: %r)",
+                msg,
+            )
 
     reader.switch_blocked.connect(_on_switch_blocked)
 
@@ -440,8 +587,14 @@ def main() -> None:
         if current_id not in task_list.visible_task_ids():
             try:
                 reader.clear()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                # reader.clear() pode falhar se o widget ja foi destruido;
+                # nao ha acao de recuperacao, mas a falha e sempre logada.
+                _logger.exception(
+                    "reader.clear falhou ao reconciliar visibilidade "
+                    "(task oculta id=%s)",
+                    current_id,
+                )
 
     # ── DataTest Debug Overlay (3 modos: all / body / buttons) ─────
     try:

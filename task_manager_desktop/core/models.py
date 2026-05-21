@@ -21,6 +21,7 @@ class Sector(IntEnum):
     WAITING = 2
     BLOCKED = 3
     DONE = 4
+    PERMANENT = 5
 
     def label_pt(self) -> str:
         _LABELS: dict[int, str] = {
@@ -28,6 +29,7 @@ class Sector(IntEnum):
             2: "A fazer",
             3: "Bloqueada",
             4: "Concluída",
+            5: "Permanentes",
         }
         return _LABELS[self.value]
 
@@ -55,6 +57,8 @@ class Task:
     created_at: str = ""
     completed_at: str | None = None
     hidden_at: str | None = None
+    favorito: bool = False
+    permanente: bool = False
 
 
 @dataclass

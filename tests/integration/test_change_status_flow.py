@@ -144,17 +144,34 @@ def test_done_to_pending_clears_completed_at_in_db(repo_factory, make_task):
 # ---------------------------------------------------------------------------
 
 
+# Strict AC-T-006 budget (p95), only enforced under --run-perf on a
+# dedicated/quiet runner where tail-latency measurement is trustworthy.
+_PERF_STRICT_P95_MS = 50.0
+# Default regression ceiling enforced on EVERY run, asserted against the MEDIAN
+# (p50), not p95. Rationale: when 600+ tests hammer the box in one process, a
+# handful of GC/scheduler outliers inflate p95/p99 (observed 23-41ms vs ~7ms
+# mean) — gating the *tail* there is inherently flaky. The median is immune to
+# a few outliers but still moves under a genuine regression (missing index,
+# accidental O(n) per call). Observed p50 is ~5-15ms; 100ms is a ~7-15x margin,
+# so the gate runs by default without flaking instead of being silently skipped.
+_PERF_REGRESSION_P50_MS = 100.0
+
+
 @pytest.mark.perf
 def test_change_status_p95_under_50ms_100_runs(repo_factory, make_task, request):
-    """Performance gate: p95 do ciclo update_status + refresh <= 50ms em 100 chamadas.
+    """Performance gate: ciclo update_status + refresh em 100 chamadas.
 
-    @pytest.mark.perf (opt-in): assert p95 so falha quando --run-perf for passado.
-    Sem a flag, o teste roda mas a assertion vira pytest.skip — evita flaky em CI compartilhado.
+    Two-tier gate (no longer silently skipped):
+      * default: p50 (mediana) <= 100ms — pega regressao de ordem de magnitude
+        sem flakar sob carga de suite cheia, porque a mediana ignora outliers
+        de GC/scheduler. Roda e protege em TODA execucao.
+      * --run-perf: p95 <= 50ms — orcamento estrito AC-T-006, para runner
+        dedicado/silencioso onde a cauda de latencia e confiavel.
 
     Given um repo SQLite em tmpfile com 1 task seed
     When executamos 100 ciclos pending<->done medindo cada chamada
-    Then p95 dos tempos coletados deve ser <= 50ms (AC-T-006)
-    And p99 documentado para inspecao manual
+    Then a metrica da tier ativa respeita seu teto
+    And p95/p99 sao sempre impressos para inspecao manual
     """
     import statistics
 
@@ -179,23 +196,85 @@ def test_change_status_p95_under_50ms_100_runs(repo_factory, make_task, request)
         timings.append((t1 - t0) * 1000)  # ms
 
     timings_sorted = sorted(timings)
+    p50 = statistics.median(timings_sorted)
     p95_idx = int(len(timings_sorted) * 0.95)
     p99_idx = int(len(timings_sorted) * 0.99)
     p95 = timings_sorted[p95_idx]
     p99 = timings_sorted[min(p99_idx, len(timings_sorted) - 1)]
 
-    print(f"\n[perf] p95={p95:.2f}ms p99={p99:.2f}ms mean={statistics.mean(timings):.2f}ms")
+    print(
+        f"\n[perf] p50={p50:.2f}ms p95={p95:.2f}ms p99={p99:.2f}ms "
+        f"mean={statistics.mean(timings):.2f}ms"
+    )
 
-    run_perf = request.config.getoption("--run-perf", default=False) if hasattr(request.config, "getoption") else False
-    if not run_perf:
-        pytest.skip("perf gate is opt-in; pass --run-perf to enforce p95 budget")
-
-    assert p95 <= 50.0, f"p95={p95:.2f}ms exceeds 50ms budget (AC-T-006)"
+    run_perf = (
+        request.config.getoption("--run-perf", default=False)
+        if hasattr(request.config, "getoption")
+        else False
+    )
+    if run_perf:
+        # Strict tier: enforce the AC-T-006 tail-latency budget.
+        assert p95 <= _PERF_STRICT_P95_MS, (
+            f"p95={p95:.2f}ms exceeds {_PERF_STRICT_P95_MS:.0f}ms "
+            f"(strict AC-T-006 budget)"
+        )
+    else:
+        # Default tier: median-based regression gate, robust to load spikes.
+        assert p50 <= _PERF_REGRESSION_P50_MS, (
+            f"p50={p50:.2f}ms exceeds {_PERF_REGRESSION_P50_MS:.0f}ms "
+            f"(default regression budget)"
+        )
 
 
 # ---------------------------------------------------------------------------
 # TASK-4/ST007 — provider call_count <= 1 por mudanca (regressao light)
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# AC-12 — DONE -> PENDING em task permanente preserva permanente=True
+# (source.md secao 5 AC-12 + secao 2 invariante 7)
+# ---------------------------------------------------------------------------
+
+
+def test_done_to_pending_keeps_permanente_and_leaves_permanent_sector(
+    repo_factory, make_task
+):
+    """AC-12 regression: task com status=DONE, permanente=True (setor PERMANENT)
+    transicionada para PENDING mantem permanente=True no banco e sai do setor
+    PERMANENT para o setor canonico de PENDING. Dirigido pelo controller."""
+    from task_manager_desktop.core.models import Sector
+
+    repo = repo_factory
+    task = make_task(id="P", status=Status.DONE)
+    task.permanente = True
+    repo.create(task)
+
+    # Estado inicial: DONE + permanente == setor PERMANENT.
+    before = repo.get_by_id("P")
+    assert before is not None
+    assert before.permanente is True
+    sector_before, _ = compute_sector(before.status, False, before.permanente)
+    assert sector_before == Sector.PERMANENT
+
+    ctrl = ChangeStatusController(
+        repo=repo,
+        all_tasks_provider=lambda: {t.id: t for t in repo.list_active()},
+        error_handler=_NullErrorHandler(),
+        refresh_card=lambda t: None,
+    )
+    ctrl.change_status(task, "pending")
+
+    # (a) permanente=True permanece persistido no banco.
+    after = repo.get_by_id("P")
+    assert after is not None
+    assert after.status == Status.PENDING
+    assert after.permanente is True
+
+    # (b) setor recomputado NAO e mais PERMANENT — vai para o canonico de PENDING.
+    sector_after, _ = compute_sector(after.status, False, after.permanente)
+    assert sector_after != Sector.PERMANENT
+    assert sector_after == Sector.WAITING
 
 
 def test_change_status_calls_provider_once_in_integration(repo_factory, make_task):

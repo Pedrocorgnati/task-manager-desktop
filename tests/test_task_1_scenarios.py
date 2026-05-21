@@ -90,7 +90,10 @@ def test_ac_t001_button_disabled_when_no_done_visible(header, repo):
     _recalc_button(header, repo)
 
     assert not header._btn_clear_done.isEnabled()
-    assert "Nenhuma task concluída visível" in header._btn_clear_done.toolTip()
+    assert (
+        header._btn_clear_done.toolTip()
+        == "Sem tasks concluídas não-permanentes para ocultar"
+    )
 
 
 def test_ac_t001_button_disabled_by_default_no_tasks(header, repo):

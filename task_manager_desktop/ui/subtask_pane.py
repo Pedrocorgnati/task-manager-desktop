@@ -1,14 +1,24 @@
 from __future__ import annotations
 
+import logging
 import random
 import uuid
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, QSize, Qt
-from PySide6.QtGui import QDropEvent, QFont
+from PySide6.QtCore import (
+    QEasingCurve,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+)
+from PySide6.QtGui import QDropEvent, QFont, QFontMetrics
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QApplication,
     QCheckBox,
     QHBoxLayout,
     QInputDialog,
@@ -30,6 +40,8 @@ from task_manager_desktop.ui.icons import BROOM_SVG, svg_to_icon
 if TYPE_CHECKING:
     from task_manager_desktop.repositories.task_repository import TaskRepository
 
+_log = logging.getLogger(__name__)
+
 _ROLE_SUBTASK_ID = Qt.ItemDataRole.UserRole + 1
 _ROLE_TEXT = Qt.ItemDataRole.UserRole + 2
 _EXPANDED_MARGINS = (8, 10, 8, 10)
@@ -48,6 +60,42 @@ _SUBTASK_CARD_WIDTH = int(
     )
     * 0.92
 )
+
+# --- AC-5: medicao de altura da subtask via QFontMetrics --------------------
+# Componentes horizontais internos do card (ver card_layout em _SubtaskRow):
+# margens esquerda+direita (8+8), espacamento interno (6) e o slot fixo do
+# chevron de notas (retainSizeWhenHidden=True, sempre reservado).
+_SUBTASK_CARD_H_PADDING = 16
+_SUBTASK_CARD_INNER_SPACING = 6
+_SUBTASK_NOTES_TOGGLE_WIDTH = 20
+# Largura efetiva (px) disponivel para o texto da subtask dentro do card.
+# O card tem largura fixa (_SUBTASK_CARD_WIDTH); o scrollbar vertical da lista
+# nao altera essa largura, entao a medicao de wrap e estavel.
+_SUBTASK_TEXT_WIDTH = (
+    _SUBTASK_CARD_WIDTH
+    - _SUBTASK_CARD_H_PADDING
+    - _SUBTASK_CARD_INNER_SPACING
+    - _SUBTASK_NOTES_TOGGLE_WIDTH
+)
+# Cromo vertical (px) somado a altura medida do texto: margens verticais do
+# card (4+4), margens externas do row (1+1) e folga visual.
+_SUBTASK_ROW_VPADDING = 16
+# Altura extra (px) de uma subtask expandida: editor de notas QPlainTextEdit
+# fixo em 70 + espacamento do QVBoxLayout do row.
+_SUBTASK_EXPANDED_EXTRA = 78
+# Altura (px) do retangulo passado ao QFontMetrics.boundingRect. Alta o
+# suficiente para nunca truncar o wrap, mesmo com subtasks de 300+ chars.
+_MEASURE_RECT_HEIGHT = 10_000
+
+SUBTASK_FALLBACK_HEIGHT = 24
+"""Altura minima (px) do bloco de texto de uma subtask.
+
+Cumpre dois papeis:
+- piso da medicao via QFontMetrics (texto curto nao colapsa a linha);
+- fallback quando ``QApplication.instance() is None`` -- em testes headless,
+  sem event loop Qt, ``QFontMetrics`` nao dispoe de font system. O valor 24
+  e suficiente para esses testes rodarem de forma determinista.
+"""
 
 _COLORS = [
     "#F97316",
@@ -264,6 +312,11 @@ class _SubtaskRow(QWidget):
             return Qt.CheckState.Checked
         return Qt.CheckState.Unchecked
 
+    @property
+    def is_expanded(self) -> bool:
+        """Indica se o editor de notas esta visivel (afeta a altura do row)."""
+        return self._expanded
+
     def _begin_inline_edit(self) -> None:
         if self._compact:
             return
@@ -273,25 +326,57 @@ class _SubtaskRow(QWidget):
         self._inline_edit.setFocus(Qt.FocusReason.MouseFocusReason)
         self._inline_edit.selectAll()
 
-    def _commit_inline_edit(self) -> None:
-        if self._inline_edit.isHidden():
-            return
-        new_text = self._inline_edit.text().strip()
-        if new_text:
-            self._subtask.text = new_text
-            self.label.setText(new_text)
-        self._inline_edit.hide()
-        self.label.show()
+    def _resolve_pane(self) -> SubtaskPane | None:
         parent = self.parent()
         while parent is not None:
             pane = getattr(parent, "_pane", None)
             if isinstance(pane, SubtaskPane):
-                pane._save_subtask_text(self._subtask)
-                break
+                return pane
             if isinstance(parent, SubtaskPane):
-                parent._save_subtask_text(self._subtask)
-                break
+                return parent
             parent = parent.parent()
+        return None
+
+    def _commit_inline_edit(self) -> None:
+        if self._inline_edit.isHidden():
+            return
+        new_text = self._inline_edit.text().strip()
+        old_text = self._subtask.text
+        if new_text and new_text != old_text:
+            # Aplica otimisticamente; a pane persiste e, em caso de falha de
+            # I/O, chama revert_inline_edit() para desfazer model + label.
+            self._subtask.text = new_text
+            self.label.setText(new_text)
+        self._inline_edit.hide()
+        self.label.show()
+        pane = self._resolve_pane()
+        if pane is not None and new_text and new_text != old_text:
+            pane._commit_subtask_text(self._subtask, self, old_text)
+
+    def revert_inline_edit(self, old_text: str) -> None:
+        """Desfaz visualmente a edicao inline apos falha de persistencia.
+
+        Espelha o padrao de rollback do autosave da estrela favorito: o texto
+        do modelo e do label voltam ao valor anterior e a borda do card ganha
+        uma indicacao de erro discreta (sem dialog modal — erro desfazivel)."""
+        self._subtask.text = old_text
+        self.label.setText(old_text)
+        self._inline_edit.setText(old_text)
+        self._flash_edit_error()
+
+    def _flash_edit_error(self) -> None:
+        """Indicacao de erro discreta: borda vermelha temporaria no card."""
+        self._card.setStyleSheet(
+            self._card.styleSheet()
+            + " QWidget#subtaskCard { border: 1px solid #EF4444; }"
+        )
+        self.setToolTip("Falha ao salvar a subtask. Texto revertido.")
+        QTimer.singleShot(2000, self._clear_edit_error)
+
+    def _clear_edit_error(self) -> None:
+        # Reaplica o estilo canonico do estado atual (limpa a borda de erro).
+        self.apply_state(self._subtask.state)
+        self.setToolTip("")
 
 
 class _SubtaskList(QListWidget):
@@ -527,14 +612,34 @@ class SubtaskPane(QWidget):
         row.set_compact(self._collapsed)
         self._list.setItemWidget(item, row)
 
+    def _measure_subtask_text_height(self, text: str) -> int:
+        """Altura (px) do texto da subtask com wrap na largura efetiva do card.
+
+        AC-5: substitui a antiga step-function por faixas de comprimento por
+        uma medicao real via ``QFontMetrics.boundingRect`` com ``TextWordWrap``,
+        garantindo que subtasks longas (300+ chars) nao truncem. Sem uma
+        ``QApplication`` ativa (testes headless) retorna ``SUBTASK_FALLBACK_HEIGHT``.
+        """
+        if QApplication.instance() is None:
+            return SUBTASK_FALLBACK_HEIGHT
+        font = self.font()
+        rect = QRect(0, 0, _SUBTASK_TEXT_WIDTH, _MEASURE_RECT_HEIGHT)
+        measured = (
+            QFontMetrics(font)
+            .boundingRect(
+                rect,
+                Qt.TextFlag.TextWordWrap | Qt.AlignmentFlag.AlignLeft,
+                text,
+            )
+            .height()
+        )
+        return max(measured, SUBTASK_FALLBACK_HEIGHT)
+
     def _row_height(self, text: str, expanded: bool = False) -> int:
-        if len(text) > 70:
-            base = 82
-        elif len(text) > 34:
-            base = 58
-        else:
-            base = 38
-        return base + (78 if expanded else 0)
+        height = self._measure_subtask_text_height(text) + _SUBTASK_ROW_VPADDING
+        if expanded:
+            height += _SUBTASK_EXPANDED_EXTRA
+        return height
 
     def _resize_subtask_item(self, item: QListWidgetItem, subtask: Subtask, expanded: bool) -> None:
         item.setSizeHint(QSize(1, self._row_height(subtask.text, expanded=expanded)))
@@ -543,15 +648,64 @@ class SubtaskPane(QWidget):
         if self._repo is not None:
             self._repo.update_subtask_notes(subtask.id, notes)
 
-    def _save_subtask_text(self, subtask: Subtask) -> None:
-        if self._repo is None:
+    def _find_item(self, subtask_id: str) -> QListWidgetItem | None:
+        for row_idx in range(self._list.count()):
+            item = self._list.item(row_idx)
+            if str(item.data(_ROLE_SUBTASK_ID)) == str(subtask_id):
+                return item
+        return None
+
+    def _commit_subtask_text(
+        self, subtask: Subtask, row: _SubtaskRow, old_text: str
+    ) -> None:
+        """Persiste a edicao inline de texto e recalcula o sizeHint (AC-5).
+
+        Persiste ANTES de refluir o layout: se a persistencia falha, o texto e
+        revertido (model + label) via ``row.revert_inline_edit`` e o sizeHint e
+        recalculado com o texto antigo, evitando data loss silenciosa.
+        """
+        if not self._save_subtask_text(subtask, row, old_text):
+            # Falha de I/O: o texto ja foi revertido por revert_inline_edit.
+            # Recalcula o sizeHint com o texto restaurado.
+            item = self._find_item(subtask.id)
+            if item is not None:
+                item.setData(_ROLE_TEXT, subtask.text)
+                item.setSizeHint(
+                    QSize(1, self._row_height(subtask.text, expanded=row.is_expanded))
+                )
+            row.updateGeometry()
             return
-        self._repo._conn.execute(
-            "UPDATE subtasks SET text = ? WHERE id = ?",
-            (subtask.text, subtask.id),
-        )
-        self._repo._conn.commit()
-        self.refresh()
+        item = self._find_item(subtask.id)
+        if item is not None:
+            item.setData(_ROLE_TEXT, subtask.text)
+            item.setSizeHint(
+                QSize(1, self._row_height(subtask.text, expanded=row.is_expanded))
+            )
+        row.updateGeometry()
+
+    def _save_subtask_text(
+        self, subtask: Subtask, row: _SubtaskRow, old_text: str
+    ) -> bool:
+        """Persiste o texto da subtask via metodo do repositorio.
+
+        Substitui o antigo RAW ``repo._conn.execute`` sem tratamento de erro
+        (data loss silenciosa). Em qualquer falha — I/O, subtask/task ausente,
+        violacao de unicidade — reverte a edicao inline visualmente e loga o
+        erro com o id da subtask. Retorna True se persistiu, False caso falhe.
+        """
+        if self._repo is None:
+            return False
+        try:
+            self._repo.update_subtask_text(subtask.id, subtask.text)
+        except Exception as exc:  # noqa: BLE001 - rollback uniforme p/ qualquer falha
+            _log.error(
+                "subtask.inline_edit_persist_failed: %s (subtask_id=%s)",
+                exc,
+                subtask.id,
+            )
+            row.revert_inline_edit(old_text)
+            return False
+        return True
 
     def _set_state(self, subtask: Subtask, row: _SubtaskRow, qt_state: int) -> None:
         # QCheckBox tri-state usa 0/1/2, exatamente o ciclo pedido.

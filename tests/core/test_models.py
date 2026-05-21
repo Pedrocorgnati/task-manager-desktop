@@ -39,17 +39,18 @@ class TestEnums:
         assert Sector(2).label_pt() == "A fazer"
         assert Sector(3).label_pt() == "Bloqueada"
         assert Sector(4).label_pt() == "Concluída"
+        assert Sector(5).label_pt() == "Permanentes"
 
-    def test_sector_has_exactly_4_values(self):
-        assert len(list(Sector)) == 4
+    def test_sector_has_exactly_5_values(self):
+        assert len(list(Sector)) == 5
 
     def test_color_has_exactly_4_values(self):
         assert {c.value for c in Color} == {"green", "yellow", "gray", "neutral"}
 
 
 class TestTaskDataclass:
-    def test_has_10_fields(self):
-        assert len(fields(Task)) == 10
+    def test_has_12_fields(self):
+        assert len(fields(Task)) == 12
 
     def test_defaults_are_sane(self):
         t = Task(id="abc", title="x")

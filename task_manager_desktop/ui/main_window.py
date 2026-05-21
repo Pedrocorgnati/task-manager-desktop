@@ -92,7 +92,6 @@ class MainWindowShell(QMainWindow):
         self._splitter.setProperty("testid", "main-splitter")
         self._middle_collapsed = False
         self._normalizing_splitter = False
-        self._column_footers: dict[int, QLabel] = {}
 
         # Empty states iniciais — substituidos por feature modules via set_*_widget
         self._left_widget: QWidget = EmptyStateLabel(
@@ -114,8 +113,6 @@ class MainWindowShell(QMainWindow):
         self.setCentralWidget(self._splitter)
         self._restore_settings()
         self._splitter.splitterMoved.connect(self._on_splitter_moved)
-        self._ensure_column_footers()
-        self._update_column_footers()
 
         self._header_widget: QWidget | None = None
         self._current_task_id: str | None = None
@@ -140,9 +137,7 @@ class MainWindowShell(QMainWindow):
             old.deleteLater()
         self._splitter.insertWidget(0, widget)
         self._left_widget = widget
-        self._ensure_column_footer(0)
         self._apply_splitter_ratios()
-        self._update_column_footers()
 
     def set_right_widget(self, widget: QWidget) -> None:
         old = self._splitter.widget(2)
@@ -151,9 +146,7 @@ class MainWindowShell(QMainWindow):
             old.deleteLater()
         self._splitter.insertWidget(2, widget)
         self._right_widget = widget
-        self._ensure_column_footer(2)
         self._apply_splitter_ratios()
-        self._update_column_footers()
 
     def set_middle_widget(self, widget: QWidget) -> None:
         old = self._splitter.widget(1)
@@ -164,9 +157,7 @@ class MainWindowShell(QMainWindow):
         self._middle_widget = widget
         if hasattr(widget, "btn_toggle"):
             widget.btn_toggle.clicked.connect(self._toggle_middle_pane)  # type: ignore[attr-defined]
-        self._ensure_column_footer(1)
         self._apply_splitter_ratios()
-        self._update_column_footers()
 
     def is_middle_collapsed(self) -> bool:
         return self._middle_collapsed
@@ -199,50 +190,7 @@ class MainWindowShell(QMainWindow):
 
     def _on_splitter_moved(self, _pos: int, _index: int) -> None:
         self._normalize_fixed_splitter_columns()
-        self._update_column_footers()
         self._save_splitter_state()
-
-    def _ensure_column_footers(self) -> None:
-        for index in (0, 1, 2):
-            self._ensure_column_footer(index)
-
-    def _ensure_column_footer(self, index: int) -> None:
-        parent = self._splitter.widget(index)
-        if parent is None:
-            return
-        existing = self._column_footers.get(index)
-        if existing is not None and existing.parent() is parent:
-            return
-        if existing is not None:
-            existing.deleteLater()
-        label = QLabel(parent)
-        label.setObjectName(f"columnFooter{index + 1}")
-        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        label.setStyleSheet(
-            "background-color: rgba(8, 10, 18, 0.86);"
-            "color: #A1A1AA;"
-            "font-size: 11px;"
-            "padding: 2px 0;"
-            "border-top: 1px solid rgba(161, 161, 170, 0.35);"
-        )
-        label.raise_()
-        self._column_footers[index] = label
-
-    def _update_column_footers(self) -> None:
-        sizes = self._splitter.sizes()
-        if len(sizes) != 3:
-            return
-        for index, width in enumerate(sizes):
-            self._ensure_column_footer(index)
-            footer = self._column_footers.get(index)
-            parent = self._splitter.widget(index)
-            if footer is None or parent is None:
-                continue
-            h = 22
-            footer.setText(f"{int(width)} px")
-            footer.setGeometry(0, max(0, parent.height() - h), max(0, parent.width()), h)
-            footer.raise_()
 
     def _normalize_fixed_splitter_columns(self) -> None:
         if self._normalizing_splitter:
@@ -362,4 +310,3 @@ class MainWindowShell(QMainWindow):
 
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
-        self._update_column_footers()

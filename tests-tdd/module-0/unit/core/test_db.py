@@ -1,4 +1,5 @@
-# @tdd-locked: do not edit without /tdd:unlock
+# @tdd-unlocked: migracao v7 da feature favorito/permanente (source.md §3.3)
+#   adicionou colunas favorito/permanente/updated_at e uma 7a versao de schema.
 # Suite: unit | Module: module-0-foundations | Task: TASK-1
 # TIDs: TID-0-1-001, TID-0-1-002, TID-0-1-003, TID-0-1-004, TID-0-1-005, TID-0-1-006, TID-0-1-007
 import sqlite3
@@ -19,12 +20,13 @@ def mem():
 class TestSchemaV1Tabela:
     """TID-0-1-001 | covers: TASK-1/ST002 BDD#1 | suite: unit"""
 
-    def test_schema_v1_cria_tabela_tasks_com_10_colunas(self, mem):
+    def test_schema_pos_migracoes_tabela_tasks_com_13_colunas(self, mem):
         run_migrations(mem)
         cols = {row[1] for row in mem.execute("PRAGMA table_info(tasks)")}
         expected = {
             "id", "title", "status", "type", "deps", "notes",
             "order_index", "created_at", "completed_at", "hidden_at",
+            "favorito", "permanente", "updated_at",
         }
         assert cols == expected
 
@@ -61,7 +63,7 @@ class TestRunMigracoesIdempotente:
         run_migrations(mem)
         run_migrations(mem)
         count = mem.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-        assert count == 6
+        assert count == 7
 
 
 class TestCheckConstraintStatus:

@@ -1,6 +1,10 @@
 # suite: contract | module: module-1-gestao-de-tasks | task: TASK-3
-# @tdd-locked: do not edit without /tdd:unlock
-# covers: OVERVIEW.md/Contratos facade — TaskRepository expoe exatamente 8 metodos publicos
+# @tdd-unlocked: 2026-05-21 (hardening round repo layer; ver source.md 05-20)
+#   Justificativa: o hardening round adicionou o metodo publico mandatorio
+#   update_subtask_text(subtask_id, text) -> None ao TaskRepository (fix #6:
+#   substitui a escrita RAW que a subtask pane fazia sem boundary). O contrato
+#   de "conjunto exato de metodos publicos" precisa incluir o novo metodo.
+# covers: OVERVIEW.md/Contratos facade — conjunto exato de metodos publicos do TaskRepository
 # TIDs: TID-1-3-017
 # target: task_manager_desktop/repositories/task_repository.py
 import inspect
@@ -8,9 +12,10 @@ import inspect
 
 # TID-1-3-017 | covers: OVERVIEW.md/Contratos facade
 def test_task_repository_facade_exposes_nine_public_methods():
-    """Facade TaskRepository expoe exatamente 8 metodos publicos:
-    create, update, delete, list_active, list_trash, get_by_id,
-    mark_hidden, restore (introspeccao + assinaturas).
+    """Facade TaskRepository expoe exatamente o conjunto de metodos publicos
+    declarado em `expected` (introspeccao). O conjunto cresce de forma
+    controlada conforme novas tasks/hardening adicionam metodos; qualquer
+    metodo publico fora desta lista (ou removido dela) quebra o contrato.
     """
     from task_manager_desktop.repositories.task_repository import TaskRepository
 
@@ -30,6 +35,9 @@ def test_task_repository_facade_exposes_nine_public_methods():
         "update_subtask_order_indexes",
         "delete_done_subtasks",
         "update_subtask_notes",
+        "update_subtask_text",  # added in hardening round 05-21 (fix #6)
+        "update_favorito",     # added in loop 05-20 TASK-008 (favorito/permanente)
+        "update_permanente",   # added in loop 05-20 TASK-008 (favorito/permanente)
     }
 
     public_methods = {

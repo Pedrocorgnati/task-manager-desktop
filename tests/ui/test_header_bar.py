@@ -122,7 +122,10 @@ def test_clear_done_button_tooltip_when_disabled(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
     bar.set_clear_done_enabled(False)
-    assert "Nenhuma task concluída visível" in bar._btn_clear_done.toolTip()
+    assert (
+        "Sem tasks concluídas não-permanentes para ocultar"
+        in bar._btn_clear_done.toolTip()
+    )
 
 
 def test_clear_done_button_tooltip_when_enabled(qtbot):

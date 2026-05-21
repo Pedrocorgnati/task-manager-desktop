@@ -9,13 +9,14 @@
 #   - aceita Status enum (nao str)
 #   - completed_at=None -> coluna NULL
 #   - completed_at=datetime -> ISO format
-#   - comportamento em task_id inexistente (documenta contrato atual do repo)
+#   - task_id inexistente -> TaskNotFoundError (hardening 05-21, invariante 8)
 import inspect
 import sqlite3
 from datetime import datetime, timezone
 
 import pytest
 
+from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.core.models import Status, Task
 
 # ---------------------------------------------------------------------------
@@ -51,7 +52,8 @@ def test_update_status_contract_signature_and_persistence(repo_factory):
       2. Aceita Status enum (nao str cru).
       3. completed_at=None -> coluna NULL no banco.
       4. completed_at=datetime -> coluna em formato ISO 8601.
-      5. Chamada com task_id inexistente nao explode (no-op silencioso documentado).
+      5. Chamada com task_id inexistente levanta TaskNotFoundError
+         (contrato hardened 05-21; rowcount == 0 e falha, nao no-op).
     """
     from task_manager_desktop.repositories.task_repository import TaskRepository
 
@@ -95,6 +97,11 @@ def test_update_status_contract_signature_and_persistence(repo_factory):
     parsed = datetime.fromisoformat(row.completed_at)
     assert parsed is not None
 
-    # 5. task_id inexistente: silencioso (no-op, nao lanca excecao)
-    repo.update_status("id_que_nao_existe", Status.DONE, None)
-    # se chegou aqui, nao lancou — contrato documentado
+    # 5. task_id inexistente: contrato HARDENED (hardening round 05-21).
+    #    source.md invariante 8 / secao 3.4: um UPDATE de linha unica por `id`
+    #    que nao afeta nenhuma linha NAO e no-op silencioso — e falha. Tratar
+    #    como sucesso faria a UI divergir do banco (anti Zero Silencio).
+    #    update_status passa a levantar TaskNotFoundError, igual a
+    #    update_favorito/update_permanente.
+    with pytest.raises(TaskNotFoundError):
+        repo.update_status("id_que_nao_existe", Status.DONE, None)
