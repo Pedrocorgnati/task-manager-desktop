@@ -10,10 +10,13 @@ def test_schema_v1_creates_tasks_table(in_memory_db):
     cursor = in_memory_db.execute("PRAGMA table_info(tasks)")
     columns = {row[1] for row in cursor}
     expected = {
-        "id", "title", "status", "type", "deps", "notes",
+        "id", "title", "status", "deps", "notes",
         "order_index", "created_at", "completed_at", "hidden_at",
         # v7: campos favorito/permanente + updated_at (touch em update_*)
         "favorito", "permanente", "updated_at",
+        # v8: flag manual do setor "Em preparação"
+        "em_preparacao",
+        # v10 removeu a coluna `type` (o tipo migrou para as subtasks).
     }
     assert expected == columns
 
@@ -39,7 +42,8 @@ def test_migration_is_idempotent(in_memory_db):
     run_migrations(in_memory_db)
     run_migrations(in_memory_db)
     count = in_memory_db.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-    assert count == 7
+    # v10: drop da coluna `type` de tasks (o tipo vive nas subtasks).
+    assert count == 10
 
 
 def test_migration_v3_converts_legacy_online_offline_values(in_memory_db):
@@ -80,15 +84,13 @@ def test_migration_v3_converts_legacy_online_offline_values(in_memory_db):
 
     run_migrations(in_memory_db)
 
-    rows = {
-        row["id"]: row["type"]
-        for row in in_memory_db.execute("SELECT id, type FROM tasks ORDER BY id")
-    }
-    assert rows == {"a": "agent", "h": "human"}
-    with pytest.raises(sqlite3.IntegrityError):
-        in_memory_db.execute(
-            "INSERT INTO tasks (id, title, status, type) VALUES ('old', 'Old', 'pending', 'online')"
-        )
+    # A v3 converte online->agent / offline->human, mas a v10 dropa a coluna
+    # `type` de tasks por completo. O invariante observavel apos a cadeia toda e:
+    # as linhas legadas sobrevivem e a coluna `type` nao existe mais em tasks.
+    ids = [row["id"] for row in in_memory_db.execute("SELECT id FROM tasks ORDER BY id")]
+    assert ids == ["a", "h"]
+    cols = {row[1] for row in in_memory_db.execute("PRAGMA table_info(tasks)")}
+    assert "type" not in cols
 
 
 def test_migration_v4_adds_subtask_notes_column(in_memory_db):
@@ -97,14 +99,16 @@ def test_migration_v4_adds_subtask_notes_column(in_memory_db):
     assert "notes" in columns
 
 
-def test_type_check_constraint_accepts_dev(in_memory_db):
+def test_v10_drops_tasks_type_column(in_memory_db):
+    # O tipo deixou de ser atributo da task (migration v10). A coluna `type`
+    # nao existe mais em tasks e inserir nela falha.
     run_migrations(in_memory_db)
-    in_memory_db.execute(
-        "INSERT INTO tasks (id, title, status, type) VALUES ('dev1', 'Dev', 'pending', 'dev')"
-    )
-    in_memory_db.commit()
-    row = in_memory_db.execute("SELECT type FROM tasks WHERE id='dev1'").fetchone()
-    assert row["type"] == "dev"
+    cols = {row[1] for row in in_memory_db.execute("PRAGMA table_info(tasks)")}
+    assert "type" not in cols
+    with pytest.raises(sqlite3.OperationalError):
+        in_memory_db.execute(
+            "INSERT INTO tasks (id, title, status, type) VALUES ('x', 'T', 'pending', 'dev')"
+        )
 
 
 def test_status_check_constraint(in_memory_db):
@@ -113,24 +117,6 @@ def test_status_check_constraint(in_memory_db):
         in_memory_db.execute(
             "INSERT INTO tasks (id, title, status) VALUES ('a1b', 'T', 'invalid')"
         )
-
-
-def test_type_check_constraint(in_memory_db):
-    run_migrations(in_memory_db)
-    with pytest.raises(sqlite3.IntegrityError):
-        in_memory_db.execute(
-            "INSERT INTO tasks (id, title, status, type) VALUES ('a1b', 'T', 'pending', 'bad')"
-        )
-
-
-def test_type_defaults_to_agent(in_memory_db):
-    run_migrations(in_memory_db)
-    in_memory_db.execute(
-        "INSERT INTO tasks (id, title, status) VALUES ('a1b', 'T', 'pending')"
-    )
-    in_memory_db.commit()
-    row = in_memory_db.execute("SELECT type FROM tasks WHERE id='a1b'").fetchone()
-    assert row["type"] == "agent"
 
 
 def test_schema_version_table_name_has_underscore_prefix(in_memory_db):

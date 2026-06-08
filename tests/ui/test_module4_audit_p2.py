@@ -16,15 +16,13 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QCheckBox
+from PySide6.QtWidgets import QCheckBox
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Subtask, Task, TaskType
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.header import HeaderBar
 from task_manager_desktop.ui.task_list import TaskList
-
 
 # ----------------------------------------------------------------------
 # Shared fixtures / helpers
@@ -45,13 +43,11 @@ def _mk(
     notes: str = "",
     order_index: int = 1,
     status: Status = Status.PENDING,
-    task_type: TaskType = TaskType.HUMAN,
 ) -> Task:
     t = Task(
         id=tid,
         title=title,
         status=status,
-        type=task_type,
         deps=[],
         notes=notes,
         order_index=order_index,
@@ -134,8 +130,11 @@ def test_gap005_delete_with_selection_invokes_hard_delete(qtbot, repo):
 
 def test_gap006_filter_preserved_after_refresh_simulating_create(qtbot, repo):
     """US-021 c1: após criar nova task, filtro corrente continua aplicado."""
-    _mk(repo, tid="t1", title="human task", task_type=TaskType.HUMAN)
-    _mk(repo, tid="t2", title="dev task", task_type=TaskType.DEV, order_index=2)
+    _mk(repo, tid="t1", title="human task")
+    _mk(repo, tid="t2", title="dev task", order_index=2)
+    # O filtro de tipo atua via subtasks: cada card precisa de uma subtask do tipo.
+    repo.create_subtask(Subtask(id="t1-s", task_id="t1", text="s", type=TaskType.HUMAN))
+    repo.create_subtask(Subtask(id="t2-s", task_id="t2", text="s", type=TaskType.DEV))
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
@@ -145,7 +144,8 @@ def test_gap006_filter_preserved_after_refresh_simulating_create(qtbot, repo):
     assert tl._task_types == frozenset({"human"})
 
     # simulate "create new task" path: append + refresh from repo
-    _mk(repo, tid="t3", title="agent task", task_type=TaskType.AGENT, order_index=3)
+    _mk(repo, tid="t3", title="agent task", order_index=3)
+    repo.create_subtask(Subtask(id="t3-s", task_id="t3", text="s", type=TaskType.AGENT))
     tl.refresh(repo.list_active())
 
     assert tl._task_types == frozenset({"human"}), "type filter deve persistir após refresh"
@@ -156,8 +156,10 @@ def test_gap006_filter_preserved_after_refresh_simulating_create(qtbot, repo):
 
 def test_gap006_filter_preserved_after_refresh_simulating_edit(qtbot, repo):
     """US-021 c2: após editar uma task, filtro de tipo persiste."""
-    _mk(repo, tid="t1", title="human alpha", task_type=TaskType.HUMAN)
-    _mk(repo, tid="t2", title="dev beta", task_type=TaskType.DEV, order_index=2)
+    _mk(repo, tid="t1", title="human alpha")
+    _mk(repo, tid="t2", title="dev beta", order_index=2)
+    repo.create_subtask(Subtask(id="t1-s", task_id="t1", text="s", type=TaskType.HUMAN))
+    repo.create_subtask(Subtask(id="t2-s", task_id="t2", text="s", type=TaskType.DEV))
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)
@@ -175,8 +177,10 @@ def test_gap006_filter_preserved_after_refresh_simulating_edit(qtbot, repo):
 
 def test_gap006_filter_preserved_after_refresh_simulating_delete(qtbot, repo):
     """US-021 c3: após deletar uma task, filtro corrente continua aplicado."""
-    t1 = _mk(repo, tid="t1", title="human", task_type=TaskType.HUMAN)
-    _mk(repo, tid="t2", title="dev", task_type=TaskType.DEV, order_index=2)
+    t1 = _mk(repo, tid="t1", title="human")
+    _mk(repo, tid="t2", title="dev", order_index=2)
+    repo.create_subtask(Subtask(id="t1-s", task_id="t1", text="s", type=TaskType.HUMAN))
+    repo.create_subtask(Subtask(id="t2-s", task_id="t2", text="s", type=TaskType.DEV))
     tl = TaskList()
     qtbot.addWidget(tl)
     tl.set_repo(repo)

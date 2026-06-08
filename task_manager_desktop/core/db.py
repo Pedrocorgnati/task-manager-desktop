@@ -256,6 +256,12 @@ def get_connection(db_path: Path | None = None) -> sqlite3.Connection:
             raise RuntimeError("get_connection() chamado antes de ensure_data_dir_and_db()")
         _connection = sqlite3.connect(str(db_path))
         _connection.row_factory = sqlite3.Row
+        # SQLite default e foreign_keys=0 POR CONEXAO. Sem isto, o
+        # `ON DELETE CASCADE` de subtasks/permanent_task_schedules nao dispara
+        # num restart do app (banco ja migrado), e TaskRepository.delete() —
+        # que so faz `DELETE FROM tasks` confiando no cascade — deixaria
+        # subtasks orfas. Habilitar e idempotente e seguro (fora de transacao).
+        _connection.execute("PRAGMA foreign_keys = ON")
         creator = threading.current_thread()
         _connection_thread_id = creator.ident
         _connection_thread_name = creator.name
@@ -303,6 +309,211 @@ def run_migrations(conn: sqlite3.Connection, db_path: Path | None = None) -> Non
     # v7: migracao hardened com backup obrigatorio + gate pos-migracao.
     if _TARGET_SCHEMA_VERSION not in applied:
         _apply_migration_v7(conn, db_path)
+
+    # v8: coluna em_preparacao (setor manual "Em preparação"). DDL simples e
+    # reentrante — roda sempre apos a v7 ja ter garantido o schema base.
+    _apply_migration_v8(conn)
+
+    # v9: coluna type em subtasks (mesmo enum agent/dev/human de tasks). DDL
+    # simples e reentrante — roda sempre apos a v8.
+    _apply_migration_v9(conn)
+
+    # v10: dropa a coluna tasks.type (o tipo migrou de vez para as subtasks).
+    # Rebuild de tabela porque a coluna tem CHECK inline (SQLite nao dropa
+    # coluna usada em CHECK). Hardened (backup + transacao atomica), reentrante.
+    _apply_migration_v10(conn, db_path)
+
+
+# Versao da migracao v8 (coluna em_preparacao). Vive fora de _MIGRATIONS para
+# nao interferir no precheck dual da v7 (que assume max(_schema_version) == 6
+# num banco pre-v7); aplicada explicitamente apos a v7 em run_migrations.
+_V8_VERSION = 8
+
+
+def _apply_migration_v8(conn: sqlite3.Connection) -> None:
+    """Migracao v7 -> v8: adiciona a coluna booleana em_preparacao a tasks.
+
+    Idempotente e reentrante: nao reaplica se a versao 8 ja consta em
+    _schema_version, e so emite o ALTER se a coluna ainda nao existe (banco
+    divergente). INTEGER NOT NULL DEFAULT 0 -> linhas existentes recebem 0;
+    o CHECK blinda contra valores fora do dominio booleano.
+    """
+    applied = {row[0] for row in conn.execute("SELECT version FROM _schema_version")}
+    if _V8_VERSION in applied:
+        return
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+    if "em_preparacao" not in existing_cols:
+        conn.execute(
+            "ALTER TABLE tasks ADD COLUMN em_preparacao INTEGER NOT NULL "
+            "DEFAULT 0 CHECK (em_preparacao IN (0, 1))"
+        )
+    conn.execute("INSERT INTO _schema_version (version) VALUES (?)", (_V8_VERSION,))
+    conn.execute(f"PRAGMA user_version = {_V8_VERSION}")
+    conn.commit()
+    _logger.info("migracao v7->v8: coluna em_preparacao garantida em tasks")
+
+
+# Versao da migracao v10 (drop da coluna tasks.type). Rebuild de tabela.
+_V10_VERSION = 10
+
+# DDL canonica da tabela `tasks` pos-v10 (sem a coluna `type`). Mantida como
+# constante para o rebuild reconstruir com os mesmos CHECK/defaults das demais
+# colunas (status/favorito/permanente/em_preparacao).
+_TASKS_V10_DDL = """
+CREATE TABLE tasks_v10 (
+    id          TEXT PRIMARY KEY,
+    title       TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('pending', 'in_progress', 'done')),
+    deps        TEXT DEFAULT '',
+    notes       TEXT DEFAULT '',
+    order_index INTEGER DEFAULT 0,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP NULL,
+    hidden_at   TIMESTAMP NULL,
+    favorito    INTEGER NOT NULL DEFAULT 0 CHECK (favorito IN (0, 1)),
+    permanente  INTEGER NOT NULL DEFAULT 0 CHECK (permanente IN (0, 1)),
+    updated_at  TEXT,
+    em_preparacao INTEGER NOT NULL DEFAULT 0 CHECK (em_preparacao IN (0, 1))
+)
+"""
+
+_TASKS_V10_COLUMNS = (
+    "id, title, status, deps, notes, order_index, created_at, "
+    "completed_at, hidden_at, favorito, permanente, updated_at, em_preparacao"
+)
+
+
+def _backup_before_v10(conn: sqlite3.Connection, db_path: Path | None) -> Path | None:
+    """Backup obrigatorio antes do rebuild destrutivo da v10.
+
+    O rebuild dropa a tabela `tasks`; um backup `.bak-v9-<ts>` da uma copia de
+    seguranca para quem ja estava em v7/v8/v9 (e nao tem mais o `.bak-v6` da v7,
+    ou cujos dados favorito/permanente/em_preparacao sao posteriores a ele).
+    Retorna o path do backup, ou None se o banco e em memoria. Falha ao copiar
+    levanta MigrationError (mesma disciplina da v7).
+    """
+    if db_path is None or not db_path.exists():
+        _logger.info("migracao v9->v10: backup dispensado (banco em memoria)")
+        return None
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    backup_path = db_path.with_name(f"{db_path.name}.bak-v9-{timestamp}")
+    try:
+        shutil.copy2(db_path, backup_path)
+    except OSError as exc:
+        raise MigrationError(
+            f"migracao v10 abortada: falha ao criar backup obrigatorio em "
+            f"{backup_path}: {exc}. Crie manualmente uma copia de {db_path} "
+            "antes de reabrir o app."
+        ) from exc
+    _logger.info("migracao v9->v10: backup criado em %s", backup_path)
+    return backup_path
+
+
+def _apply_migration_v10(conn: sqlite3.Connection, db_path: Path | None = None) -> None:
+    """Migracao v9 -> v10: remove a coluna `type` da tabela `tasks`.
+
+    O tipo (agent/dev/human) deixou de ser um atributo da task e passou a viver
+    exclusivamente nas subtasks. Como `tasks.type` tem um CHECK inline, o SQLite
+    nao permite `ALTER TABLE ... DROP COLUMN`; e necessario reconstruir a tabela.
+
+    Rebuild HARDENED (rebuild destrutivo): backup obrigatorio, foreign_keys=OFF
+    FORA da transacao (PRAGMA foreign_keys e no-op dentro de transacao), rebuild
+    inteiro num unico BEGIN IMMEDIATE (atomico: um crash no meio nao deixa o
+    banco sem a tabela `tasks`), gate de contagem de linhas (copiou todas) e bump
+    de versao no MESMO commit; ROLLBACK em qualquer falha. Idempotente: nao
+    reaplica se a versao 10 ja consta; reentrante: se a coluna ja sumiu (banco
+    divergente) apenas registra a versao.
+    """
+    applied = {row[0] for row in conn.execute("SELECT version FROM _schema_version")}
+    if _V10_VERSION in applied:
+        return
+
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+    if "type" not in existing_cols:
+        # Banco divergente: a coluna ja nao existe. So registra a versao.
+        conn.execute("INSERT INTO _schema_version (version) VALUES (?)", (_V10_VERSION,))
+        conn.execute(f"PRAGMA user_version = {_V10_VERSION}")
+        conn.commit()
+        _logger.info("migracao v9->v10: coluna type ja ausente; versao registrada")
+        return
+
+    # Backup obrigatorio antes de qualquer DROP.
+    _backup_before_v10(conn, db_path)
+
+    prev_isolation = conn.isolation_level
+    # foreign_keys nao pode ser alterado dentro de uma transacao -> setar ANTES
+    # do BEGIN. Com FK ON (get_connection), DROP TABLE tasks dispararia o
+    # cascade e apagaria TODAS as subtasks; OFF durante o rebuild evita isso.
+    conn.isolation_level = None
+    try:
+        conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except sqlite3.OperationalError as exc:
+            raise MigrationError(
+                "migracao v10 abortada: outra conexao esta escrevendo no banco "
+                f"({exc}). Feche outras instancias do app e tente novamente."
+            ) from exc
+        try:
+            conn.execute(_TASKS_V10_DDL)
+            conn.execute(
+                f"INSERT INTO tasks_v10 ({_TASKS_V10_COLUMNS}) "
+                f"SELECT {_TASKS_V10_COLUMNS} FROM tasks"
+            )
+            src = conn.execute("SELECT COUNT(*) FROM tasks").fetchone()[0]
+            dst = conn.execute("SELECT COUNT(*) FROM tasks_v10").fetchone()[0]
+            if src != dst:
+                raise MigrationError(
+                    f"migracao v10 abortada: copia incompleta ({dst} de {src} "
+                    "linhas). Rollback aplicado; nenhuma alteracao persistida."
+                )
+            conn.execute("DROP TABLE tasks")
+            conn.execute("ALTER TABLE tasks_v10 RENAME TO tasks")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_status       ON tasks(status)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_completed_at ON tasks(completed_at)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_hidden_at    ON tasks(hidden_at)")
+            conn.execute(
+                "INSERT INTO _schema_version (version) VALUES (?)", (_V10_VERSION,)
+            )
+            conn.execute(f"PRAGMA user_version = {_V10_VERSION}")
+            conn.execute("COMMIT")
+        except BaseException:
+            conn.execute("ROLLBACK")
+            raise
+    finally:
+        conn.execute("PRAGMA foreign_keys=ON")
+        conn.isolation_level = prev_isolation
+    _logger.info("migracao v9->v10: coluna type removida de tasks (rebuild atomico)")
+
+
+# Versao da migracao v9 (coluna type em subtasks). Vive fora de _MIGRATIONS,
+# como a v8, para nao interferir no precheck dual da v7. Aplicada apos a v8.
+_V9_VERSION = 9
+
+
+def _apply_migration_v9(conn: sqlite3.Connection) -> None:
+    """Migracao v8 -> v9: adiciona a coluna `type` a subtasks.
+
+    Idempotente e reentrante: nao reaplica se a versao 9 ja consta em
+    _schema_version, e so emite o ALTER se a coluna ainda nao existe (banco
+    divergente). TEXT NOT NULL DEFAULT 'agent' -> linhas existentes herdam
+    'agent'; o CHECK blinda contra valores fora do dominio agent/dev/human.
+    """
+    applied = {row[0] for row in conn.execute("SELECT version FROM _schema_version")}
+    if _V9_VERSION in applied:
+        return
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(subtasks)")}
+    if "type" not in existing_cols:
+        # TEXT NOT NULL DEFAULT 'agent' -> linhas existentes herdam 'agent'; o
+        # CHECK blinda contra valores fora do dominio agent/dev/human.
+        conn.execute(
+            "ALTER TABLE subtasks ADD COLUMN type TEXT NOT NULL "
+            "DEFAULT 'agent' CHECK (type IN ('agent', 'dev', 'human'))"
+        )
+    conn.execute("INSERT INTO _schema_version (version) VALUES (?)", (_V9_VERSION,))
+    conn.execute(f"PRAGMA user_version = {_V9_VERSION}")
+    conn.commit()
+    _logger.info("migracao v8->v9: coluna type garantida em subtasks")
 
 
 def _backup_before_v7(conn: sqlite3.Connection, db_path: Path | None) -> Path | None:

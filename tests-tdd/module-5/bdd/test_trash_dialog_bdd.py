@@ -30,7 +30,6 @@ def sample_hidden_task():
         hidden_at=datetime.now().isoformat(),
         completed_at=datetime.now().isoformat(),
         notes="",
-        type="agent",
         deps=[],
     )
 
@@ -47,7 +46,6 @@ def sample_hidden_tasks():
             hidden_at=(now - timedelta(days=29)).isoformat(),
             completed_at=(now - timedelta(days=29)).isoformat(),
             notes="",
-            type="agent",
             deps=[],
         ),
         Task(
@@ -57,7 +55,6 @@ def sample_hidden_tasks():
             hidden_at=(now - timedelta(days=2)).isoformat(),
             completed_at=(now - timedelta(days=2)).isoformat(),
             notes="",
-            type="agent",
             deps=[],
         ),
         Task(
@@ -67,7 +64,6 @@ def sample_hidden_tasks():
             hidden_at=(now - timedelta(hours=1)).isoformat(),
             completed_at=(now - timedelta(hours=1)).isoformat(),
             notes="",
-            type="human",
             deps=[],
         ),
     ]
@@ -210,7 +206,6 @@ class TestTrashDialogEdgeCases:
             hidden_at=(now - timedelta(days=30)).isoformat(),
             completed_at=(now - timedelta(days=30)).isoformat(),
             notes="",
-            type="agent",
             deps=[],
         )
         mock_repo.list_trash.return_value = [task_at_30_days]
@@ -229,7 +224,6 @@ class TestTrashDialogEdgeCases:
             hidden_at=datetime.now().isoformat(),
             completed_at=datetime.now().isoformat(),
             notes="",
-            type="agent",
             deps=[],
         )
         mock_repo.list_trash.return_value = [task]
@@ -256,7 +250,6 @@ class TestTrashDialogEdgeCases:
             hidden_at=datetime.now().isoformat(),
             completed_at=datetime.now().isoformat(),
             notes="",
-            type="agent",
             deps=[],
         )
         mock_repo.list_trash.return_value = [task]

@@ -31,6 +31,7 @@ class MarkdownReader(QWidget):
     switch_blocked = Signal(str)
     toggle_terminal_collapse_requested = Signal()
     send_to_terminal_requested = Signal(str)
+    notes_saved = Signal(str, str)  # (task_id, new_notes)
 
     def __init__(
         self,
@@ -59,6 +60,9 @@ class MarkdownReader(QWidget):
         self._pane.send_to_terminal_requested.connect(
             self.send_to_terminal_requested.emit
         )
+        # Bubble: pane → reader. app.py usa para reconciliar o cache do task_list
+        # apos save (implicito ao trocar de card, ou explicito via Ctrl+S/toolbar).
+        self._pane.notes_saved.connect(self.notes_saved.emit)
 
     def set_terminal_collapsed(self, collapsed: bool) -> None:
         """Atualiza o chevron do toolbar (▲ colapsado / ▼ expandido)."""
@@ -100,6 +104,10 @@ class MarkdownReader(QWidget):
     # ------------------------------------------------------------------
     def show_task(self, task: Task) -> None:
         self._pane.set_task(task)
+
+    def show_document(self, path: str) -> None:
+        """Renderiza um arquivo arbitrário do SystemForge (modo documento, sem Task)."""
+        self._pane.show_document(path)
 
     def clear(self) -> None:
         self._pane.clear()

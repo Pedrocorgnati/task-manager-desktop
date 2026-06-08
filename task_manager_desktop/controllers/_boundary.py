@@ -92,7 +92,9 @@ def recompute_sector(
         return None, None
     all_tasks = {t.id: t for t in repo.list_active()}
     open_deps = has_open_deps_for(task, all_tasks)
-    sector = compute_sector(task.status, open_deps, task.permanente)
+    sector = compute_sector(
+        task.status, open_deps, task.permanente, task.em_preparacao
+    )
     return task, sector
 
 

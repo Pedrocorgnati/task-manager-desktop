@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
 
@@ -24,7 +24,6 @@ def _mk(
         id=tid,
         title=title,
         status=status,
-        type=TaskType.HUMAN,
         deps=[],
         notes="",
         order_index=order_index,

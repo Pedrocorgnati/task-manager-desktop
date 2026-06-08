@@ -5,14 +5,12 @@
 # TIDs: TID-1-2-017, TID-1-2-018
 from __future__ import annotations
 
-import pytest
-
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.widgets.status_segmented_control import StatusSegmentedControl
 
 
 def _task(status: Status = Status.PENDING) -> Task:
-    return Task(id="t", title="T", status=status, type=TaskType.AGENT, deps=[])
+    return Task(id="t", title="T", status=status, deps=[])
 
 
 # TID-1-2-017 | covers: TASK-2/ST002 segmented

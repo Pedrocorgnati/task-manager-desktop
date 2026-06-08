@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import QUrl
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.markdown_viewer import MarkdownViewer
 
 
@@ -12,7 +12,6 @@ def _make_task(**kwargs) -> Task:
         id="1",
         title="A",
         status=Status.PENDING,
-        type=TaskType.AGENT,
         deps=[],
         notes="",
         order_index=0,

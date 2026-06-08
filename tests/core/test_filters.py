@@ -1,47 +1,32 @@
 from __future__ import annotations
 
 from task_manager_desktop.core.filters import (
+    card_matches_subtasks,
     is_active,
-    matches,
 )
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import TaskType
 
 
-def _make_task(
-    title: str = "task",
-    notes: str = "",
-    task_type: TaskType = TaskType.HUMAN,
-) -> Task:
-    return Task(
-        id="t1",
-        title=title,
-        status=Status.PENDING,
-        type=task_type,
-        deps=[],
-        notes=notes,
-        order_index=1,
-        created_at="2026-05-17T10:00:00",
-    )
-
-
-def test_default_type_filter_passes():
-    assert matches(_make_task())
-
-
-def test_task_type_filter_includes_selected_types():
-    human = _make_task(task_type=TaskType.HUMAN)
-    dev = _make_task(task_type=TaskType.DEV)
-    agent = _make_task(task_type=TaskType.AGENT)
-    assert matches(human, task_types={"human", "dev"})
-    assert matches(dev, task_types={"human", "dev"})
-    assert not matches(agent, task_types={"human", "dev"})
-
-
-def test_is_active_detects_type_filter():
+def test_is_active_detects_partial_type_filter():
     assert is_active(task_types={"human", "agent"})
     assert is_active(task_types=set())
 
 
-def test_is_active_false_when_default_filters():
+def test_is_active_false_when_all_types_selected():
     assert not is_active()
     assert not is_active(task_types={t.value for t in TaskType})
+
+
+def test_card_matches_when_has_subtask_of_selected_type():
+    assert card_matches_subtasks({"agent"}, task_types={"agent"})
+    assert card_matches_subtasks({"dev", "human"}, task_types={"human"})
+    # aceita TaskType tambem
+    assert card_matches_subtasks([TaskType.DEV], task_types={TaskType.DEV})
+
+
+def test_card_does_not_match_when_no_subtask_of_selected_type():
+    assert not card_matches_subtasks({"dev"}, task_types={"agent"})
+    # card sem subtasks nunca casa sob filtro ativo
+    assert not card_matches_subtasks(set(), task_types={"agent"})
+    # nenhum tipo selecionado -> nada casa
+    assert not card_matches_subtasks({"agent", "dev"}, task_types=set())

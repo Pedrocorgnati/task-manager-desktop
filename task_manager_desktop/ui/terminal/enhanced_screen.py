@@ -12,7 +12,6 @@ import copy
 
 import pyte
 
-
 # DEC Private Mode bit for alternate screen (1049)
 _ALT_SCREEN_MODE = 1049 << 5
 

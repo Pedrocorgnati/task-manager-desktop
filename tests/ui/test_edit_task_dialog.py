@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QDialogButtonBox
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.dialogs.edit_task_dialog import EditTaskDialog
 
 
@@ -14,7 +14,6 @@ def sample_task():
         id="abc",
         title="X",
         status=Status.PENDING,
-        type=TaskType.HUMAN,
         deps=["a1b", "c2d"],
     )
 
@@ -23,8 +22,6 @@ def test_dialog_prefills_all_fields(qtbot, sample_task):
     dlg = EditTaskDialog(sample_task)
     qtbot.addWidget(dlg)
     assert dlg.form.title_input.text() == "X"
-    assert dlg.form.radio_human.isChecked() is True
-    assert dlg.form.radio_agent.isChecked() is False
     assert dlg.form.deps_input.text() == "a1b, c2d"
 
 
@@ -45,13 +42,7 @@ def test_empty_title_blocks_save(qtbot, sample_task):
     assert dlg.form.title_input.property("invalid") is True
 
 
-def test_toggle_radio_updates_get_data(qtbot, sample_task):
-    dlg = EditTaskDialog(sample_task)
-    qtbot.addWidget(dlg)
-    dlg.form.radio_agent.setChecked(True)
-    ok_btn = dlg.button_box.button(QDialogButtonBox.StandardButton.Ok)
-    qtbot.mouseClick(ok_btn, Qt.MouseButton.LeftButton)
-    assert dlg.get_data()["type"] == TaskType.AGENT
+# removido: Task.type foi removido (tipo migrou para subtasks)
 
 
 def test_enter_in_title_submits(qtbot, sample_task):
@@ -82,7 +73,6 @@ def test_get_data_returns_all_fields(qtbot, sample_task):
     qtbot.addWidget(dlg)
     data = dlg.get_data()
     assert "title" in data
-    assert "type" in data
     assert "deps" in data
 
 

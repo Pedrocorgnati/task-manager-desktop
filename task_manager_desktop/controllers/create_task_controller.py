@@ -83,6 +83,7 @@ class CreateTaskController(QObject):
         # Valor invalido levanta ValueError aqui, sem fallback silencioso.
         favorito = coerce_flag(data.get("favorito", False), "favorito")
         permanente = coerce_flag(data.get("permanente", False), "permanente")
+        em_preparacao = coerce_flag(data.get("em_preparacao", False), "em_preparacao")
         status = resolve_status(data.get("status"))
 
         try:
@@ -98,18 +99,21 @@ class CreateTaskController(QObject):
             id=task_id,
             title=data["title"],
             status=status,
-            type=data["type"],
             deps=clean_deps,
             created_at=datetime.now(timezone.utc).isoformat(),
             order_index=max((t.order_index for t in all_tasks), default=0) + 1,
             favorito=favorito,
             permanente=permanente,
+            em_preparacao=em_preparacao,
         )
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
             self._repo.create(task)
             for idx, text in enumerate(data.get("subtasks", []), start=1):
+                # As subtasks criadas no dialog de nova task nascem com o tipo
+                # default (agent); o tipo de cada uma e ajustado depois na
+                # subtask pane (o card/task nao tem mais tipo proprio).
                 subtask = Subtask(
                     id=f"st-{uuid.uuid4().hex[:10]}",
                     task_id=task.id,
@@ -132,6 +136,9 @@ class CreateTaskController(QObject):
             return False
         finally:
             QApplication.restoreOverrideCursor()
+
+        if data.get("coin_favorite"):
+            self._task_list.set_coin_favorite(task.id, True)
 
         if cycle_desc and parent_widget:
             toast = ToastWidget(parent_widget)

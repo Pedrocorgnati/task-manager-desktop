@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog
 
 from task_manager_desktop.controllers.create_task_controller import CreateTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
 
@@ -31,11 +31,10 @@ def setup(qtbot, tmp_path):
     return ctrl, repo, conn, tl
 
 
-def _fake_dialog_data(title, tipo=TaskType.AGENT, deps=""):
+def _fake_dialog_data(title, deps=""):
     from task_manager_desktop.core.models import parse_deps
     return {
         "title": title,
-        "type": tipo,
         "deps": parse_deps(deps),
     }
 
@@ -58,7 +57,7 @@ def _make_fake_dialog_cls(data: dict):
 
 # TID-1-1-001 | covers: US-001#1 | bdd_type: SUCCESS
 def test_create_no_deps_defaults(setup, monkeypatch):
-    """Task criada sem deps (type=agent default)."""
+    """Task criada sem deps."""
     ctrl, repo, conn, tl = setup
 
     from task_manager_desktop.controllers import create_task_controller as mod
@@ -73,7 +72,6 @@ def test_create_no_deps_defaults(setup, monkeypatch):
     assert len(tasks) == 1
     t = tasks[0]
     assert t.title == "Tarefa sem deps"
-    assert t.type == TaskType.AGENT
     assert t.deps == []
 
 
@@ -166,21 +164,6 @@ def test_cycle_resolved_with_toast(setup, monkeypatch):
 
 
 # TID-1-1-006 | covers: US-001#6 | bdd_type: SUCCESS
-def test_create_with_human_type(setup, monkeypatch):
-    """Task criada com radio type=human persiste e card mostra human chip."""
-    ctrl, repo, conn, tl = setup
-
-    from task_manager_desktop.controllers import create_task_controller as mod
-
-    monkeypatch.setattr(mod, "NewTaskDialog", _make_fake_dialog_cls(
-        _fake_dialog_data("Human task", tipo=TaskType.HUMAN)
-    ))
-    ctrl.handle()
-
-    tasks = repo.list_active()
-    assert len(tasks) == 1
-    assert tasks[0].type == TaskType.HUMAN
-    row = conn.execute("SELECT type FROM tasks WHERE title='Human task'").fetchone()
-    assert row["type"] == "human"
+# removido: Task.type foi removido (tipo migrou para subtasks)
 
 

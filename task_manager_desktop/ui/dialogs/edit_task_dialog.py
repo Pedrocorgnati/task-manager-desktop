@@ -20,6 +20,7 @@ class EditTaskDialog(QDialog):
     def __init__(self, task: Task, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._task = task
+        self.submit_handler = None
         self.setMinimumWidth(480)
         self.setWindowTitle("Editar task")
         self.setModal(True)
@@ -48,18 +49,6 @@ class EditTaskDialog(QDialog):
     @property
     def title_edit(self):  # type: ignore[override]
         return self.form.title_input
-
-    @property
-    def radio_agent(self):
-        return self.form.radio_agent
-
-    @property
-    def radio_dev(self):
-        return self.form.radio_dev
-
-    @property
-    def radio_human(self):
-        return self.form.radio_human
 
     @property
     def deps_edit(self):

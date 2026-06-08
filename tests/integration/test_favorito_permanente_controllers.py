@@ -23,7 +23,7 @@ from task_manager_desktop.controllers.create_task_controller import CreateTaskCo
 from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 from task_manager_desktop.core.db import run_migrations
 from task_manager_desktop.core.exceptions import TaskNotFoundError
-from task_manager_desktop.core.models import Sector, Status, Task, TaskType
+from task_manager_desktop.core.models import Sector, Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
 
@@ -123,7 +123,6 @@ def test_create_persists_favorito_permanente_and_recomputes_sector(env, monkeypa
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_new_dialog({
         "title": "Permanente concluida",
-        "type": TaskType.AGENT,
         "deps": [],
         "favorito": True,
         "permanente": True,
@@ -154,7 +153,6 @@ def test_create_defaults_status_pending_and_flags_false(env, monkeypatch):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_new_dialog({
         "title": "Sem status nem flags",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -175,7 +173,6 @@ def test_create_rejects_invalid_flag_before_repo(env, monkeypatch):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_new_dialog({
         "title": "Flag invalida",
-        "type": TaskType.AGENT,
         "deps": [],
         "favorito": "sim",
     }))
@@ -194,7 +191,6 @@ def test_create_rejects_invalid_status_before_repo(env, monkeypatch):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_new_dialog({
         "title": "Status invalido",
-        "type": TaskType.AGENT,
         "deps": [],
         "status": "concluida",
     }))
@@ -209,7 +205,7 @@ def test_create_rejects_invalid_status_before_repo(env, monkeypatch):
 # --------------------------------------------------------------------------
 def test_edit_toggles_favorito_permanente_persisted_and_recomputes_sector(env, monkeypatch):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.DONE)
+    task = Task(id="t1", title="Task", deps=[], status=Status.DONE)
     repo.create(task)
     assert repo.get_by_id("t1").permanente is False
 
@@ -219,7 +215,6 @@ def test_edit_toggles_favorito_permanente_persisted_and_recomputes_sector(env, m
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task",
-        "type": TaskType.AGENT,
         "deps": [],
         "favorito": True,
         "permanente": True,
@@ -238,7 +233,6 @@ def test_edit_toggles_favorito_permanente_persisted_and_recomputes_sector(env, m
     # Toggle de volta: permanente=False recoloca a task no setor DONE.
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task",
-        "type": TaskType.AGENT,
         "deps": [],
         "permanente": False,
     }))
@@ -250,7 +244,7 @@ def test_edit_toggles_favorito_permanente_persisted_and_recomputes_sector(env, m
 
 def test_edit_rejects_invalid_flag_before_repo(env, monkeypatch):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Task", deps=[])
     repo.create(task)
 
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
@@ -259,7 +253,6 @@ def test_edit_rejects_invalid_flag_before_repo(env, monkeypatch):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task",
-        "type": TaskType.AGENT,
         "deps": [],
         "permanente": None,
     }))
@@ -272,7 +265,7 @@ def test_edit_rejects_invalid_flag_before_repo(env, monkeypatch):
 
 def test_edit_rejects_invalid_status_before_repo(env, monkeypatch):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Task", deps=[])
     repo.create(task)
 
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
@@ -281,7 +274,6 @@ def test_edit_rejects_invalid_status_before_repo(env, monkeypatch):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task",
-        "type": TaskType.AGENT,
         "deps": [],
         "status": "arquivada",
     }))
@@ -299,7 +291,7 @@ def test_edit_permanente_true_unhides_done_task(env, monkeypatch):
     """AC-11: toggle permanente=True em task DONE oculta zera hidden_at e move
     a task para o setor PERMANENT. Dirigido pelo EditTaskController."""
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.DONE)
+    task = Task(id="t1", title="Task", deps=[], status=Status.DONE)
     repo.create(task)
     # Simula a vassoura: a task DONE foi ocultada (hidden_at != NULL).
     repo._conn.execute(
@@ -317,7 +309,6 @@ def test_edit_permanente_true_unhides_done_task(env, monkeypatch):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task",
-        "type": TaskType.AGENT,
         "deps": [],
         "permanente": True,
     }))
@@ -338,7 +329,7 @@ def test_edit_permanente_true_preserves_hidden_at_when_not_done(env, monkeypatch
     """AC-11 caso negativo: toggle permanente=True em task oculta NAO-DONE
     (PENDING) preserva hidden_at — a task nao se qualifica para PERMANENT."""
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.PENDING)
+    task = Task(id="t1", title="Task", deps=[], status=Status.PENDING)
     repo.create(task)
     repo._conn.execute(
         "UPDATE tasks SET hidden_at = ? WHERE id = ?",
@@ -351,7 +342,6 @@ def test_edit_permanente_true_preserves_hidden_at_when_not_done(env, monkeypatch
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task",
-        "type": TaskType.AGENT,
         "deps": [],
         "permanente": True,
     }))
@@ -389,7 +379,7 @@ def _find_event(caplog, event_name):
 
 def test_favorito_toggle_emits_structured_event_on_success(env, caplog):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Task", deps=[])
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -410,7 +400,7 @@ def test_favorito_toggle_emits_structured_event_on_success(env, caplog):
 
 def test_favorito_toggle_emits_structured_event_on_error(env, caplog, monkeypatch):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Task", deps=[])
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -438,7 +428,7 @@ def test_favorito_toggle_emits_structured_event_on_error(env, caplog, monkeypatc
 # --------------------------------------------------------------------------
 def test_permanente_toggle_emits_structured_event_on_success(env, caplog):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.PENDING)
+    task = Task(id="t1", title="Task", deps=[], status=Status.PENDING)
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -459,7 +449,7 @@ def test_permanente_toggle_triggered_sector_change_true_on_done_task(env, caplog
     """Toggle permanente=True numa task DONE move-a de DONE para PERMANENT:
     triggered_sector_change deve ser True (source.md secao 9)."""
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.DONE)
+    task = Task(id="t1", title="Task", deps=[], status=Status.DONE)
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -476,7 +466,7 @@ def test_permanente_toggle_triggered_sector_change_false_on_pending_task(env, ca
     """Toggle permanente=True numa task PENDING NAO muda o setor (permanente so
     influencia DONE): triggered_sector_change deve ser False."""
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.PENDING)
+    task = Task(id="t1", title="Task", deps=[], status=Status.PENDING)
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -491,7 +481,7 @@ def test_permanente_toggle_triggered_sector_change_false_on_pending_task(env, ca
 
 def test_permanente_toggle_emits_structured_event_on_error(env, caplog, monkeypatch):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.DONE)
+    task = Task(id="t1", title="Task", deps=[], status=Status.DONE)
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -518,7 +508,7 @@ def test_favorito_toggle_never_propagates_unexpected_exception(env, monkeypatch,
     """Erro inesperado (nao-sqlite) no persist nao pode escapar do controller:
     o card depende do retorno bool para destravar a estrela."""
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Task", deps=[])
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -545,7 +535,7 @@ def test_favorito_toggle_never_propagates_unexpected_exception(env, monkeypatch,
 
 def test_permanente_toggle_never_propagates_unexpected_exception(env, monkeypatch, caplog):
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.DONE)
+    task = Task(id="t1", title="Task", deps=[], status=Status.DONE)
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -570,7 +560,7 @@ def test_edit_persist_aborts_when_repo_raises_task_not_found(env, monkeypatch):
     """repo.update levanta TaskNotFoundError (rowcount 0): o _persist deve
     abortar (retornar False) e nao tratar a task sumida como sucesso."""
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Task", deps=[])
     repo.create(task)
     ctrl = EditTaskController(repo, task_list, task_list, parent=None)
 
@@ -583,7 +573,6 @@ def test_edit_persist_aborts_when_repo_raises_task_not_found(env, monkeypatch):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Task editada",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -602,7 +591,7 @@ def test_change_status_aborts_when_repo_raises_task_not_found(env, monkeypatch):
     )
 
     repo, task_list = env
-    task = Task(id="t1", title="Task", type=TaskType.AGENT, deps=[], status=Status.PENDING)
+    task = Task(id="t1", title="Task", deps=[], status=Status.PENDING)
     repo.create(task)
 
     errors = []

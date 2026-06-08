@@ -31,6 +31,8 @@ class MarkdownViewer(QWidget):
         self.setProperty("testid", "markdown-viewer")
         self.setAccessibleName("Painel de notas da task")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self._reader_light_mode = False
+        self._reader_font_size = 14
 
         self._browser = QTextBrowser(self)
         self._browser.setObjectName("markdownBrowser")
@@ -58,6 +60,7 @@ class MarkdownViewer(QWidget):
         self.set_task(None)
 
     def set_reader_theme(self, light: bool) -> None:
+        self._reader_light_mode = light
         bg = QColor("#FAFAF7" if light else "#0D0E12")
         fg = QColor("#111116" if light else "#F8FAFC")
         palette = self._browser.palette()
@@ -68,12 +71,20 @@ class MarkdownViewer(QWidget):
         self._browser.setPalette(palette)
         self._browser.viewport().setAutoFillBackground(True)
         self._browser.viewport().setPalette(palette)
+        font = self._browser.font()
+        font.setPointSize(self._reader_font_size)
+        self._browser.setFont(font)
         self._browser.document().setDefaultStyleSheet(
-            f"body {{ background: {bg.name()}; color: {fg.name()}; }}"
+            f"body {{ background: {bg.name()}; color: {fg.name()}; "
+            f"font-size: {self._reader_font_size}px; line-height: 1.55; }}"
             f"h1, h2, h3, h4, h5, h6 {{ color: {fg.name()}; font-weight: 900; }}"
             f"a {{ color: #D97706; }}"
             f"code, pre {{ background: {'#EFEDE5' if light else '#17181D'}; }}"
         )
+
+    def set_reader_font_size(self, size: int) -> None:
+        self._reader_font_size = size
+        self.set_reader_theme(self._reader_light_mode)
 
     def set_task(self, task: Task | None) -> None:
         if task is None:
@@ -91,6 +102,25 @@ class MarkdownViewer(QWidget):
             self._browser.verticalScrollBar().setValue(0)
             self._browser.setVisible(True)
             self._empty.setVisible(False)
+
+    def set_document(self, text: str, is_markdown: bool = True) -> None:
+        """Renderiza conteúdo de arquivo arbitrário (modo documento, sem Task).
+
+        Markdown é renderizado; demais formatos (.py/.txt) viram texto puro.
+        """
+        if not text:
+            self._empty.set_text("Arquivo vazio.")
+            self._empty.setAccessibleName("Documento vazio")
+            self._browser.setVisible(False)
+            self._empty.setVisible(True)
+            return
+        if is_markdown:
+            self._browser.setMarkdown(text)
+        else:
+            self._browser.setPlainText(text)
+        self._browser.verticalScrollBar().setValue(0)
+        self._browser.setVisible(True)
+        self._empty.setVisible(False)
 
     def has_notes(self) -> bool:
         return self._browser.isVisible()

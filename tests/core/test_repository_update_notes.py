@@ -6,7 +6,7 @@ import pytest
 
 from task_manager_desktop.core.db import run_migrations
 from task_manager_desktop.core.exceptions import TaskNotFoundError
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
 
@@ -30,7 +30,6 @@ def sample_task(repo) -> Task:
         id="task-abc-001",
         title="Tarefa de teste",
         status=Status.PENDING,
-        type=TaskType.AGENT,
         deps=[],
         notes="# Notas originais",
         order_index=0,

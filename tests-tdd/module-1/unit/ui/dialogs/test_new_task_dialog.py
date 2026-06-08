@@ -8,8 +8,7 @@ from PySide6.QtCore import Qt
 
 # TID-1-1-012 | covers: TASK-1/ST001 get_data()
 def test_get_data_parses_deps(qtbot):
-    """NewTaskDialog.get_data() aplica parse_deps e retorna dict com type:TaskType."""
-    from task_manager_desktop.core.models import TaskType
+    """NewTaskDialog.get_data() aplica parse_deps e retorna dict."""
     from task_manager_desktop.ui.dialogs.new_task_dialog import NewTaskDialog
 
     dlg = NewTaskDialog()
@@ -20,7 +19,6 @@ def test_get_data_parses_deps(qtbot):
     data = dlg.get_data()
 
     assert data["title"] == "Test task"
-    assert data["type"] == TaskType.AGENT
     assert data["deps"] == ["a1b", "c2d"]
 
 

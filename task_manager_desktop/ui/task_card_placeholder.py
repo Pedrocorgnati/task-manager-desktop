@@ -15,7 +15,7 @@ class TaskCardPlaceholder(QFrame):
         self.setFrameStyle(QFrame.Shape.StyledPanel)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        text = f"{task.id} - {task.title} [{task.status.value}] [type:{task.type.value}]"
+        text = f"{task.id} - {task.title} [{task.status.value}]"
         label = QLabel(text, self)
         label.setTextFormat(Qt.TextFormat.PlainText)
         label.setAccessibleName(f"Task {task.id}: {task.title}")

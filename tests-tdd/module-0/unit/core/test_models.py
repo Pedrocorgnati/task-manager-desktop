@@ -48,13 +48,15 @@ class TestTaskTypeEnum:
 class TestSectorEnum:
     """TID-0-2-005 | covers: TASK-2/ST001 + OVERVIEW Contratos + ARCHITECTURE | suite: unit"""
 
-    def test_sector_enum_tem_5_zonas_canonicas(self):
+    def test_sector_enum_tem_6_zonas_canonicas(self):
         # Sector define as zonas: ACTIVE, WAITING, BLOCKED, DONE, PERMANENT.
         # PERMANENT (source.md §3.2) e o 5o setor introduzido pela feature
-        # favorito/permanente para tasks DONE marcadas como permanentes.
-        expected = {"ACTIVE", "WAITING", "BLOCKED", "DONE", "PERMANENT"}
+        # favorito/permanente; EM_PREPARACAO e o setor manual "Em preparação".
+        expected = {
+            "ACTIVE", "WAITING", "BLOCKED", "DONE", "PERMANENT", "EM_PREPARACAO"
+        }
         assert {s.name for s in Sector} == expected
-        assert len(Sector) == 5
+        assert len(Sector) == 6
 
 
 class TestColorEnum:

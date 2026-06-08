@@ -7,7 +7,7 @@ from dataclasses import asdict
 
 import pytest
 
-from task_manager_desktop.core.models import Sector, Status, Task, TaskType
+from task_manager_desktop.core.models import Sector, Status, Task
 
 # ---------------------------------------------------------------------------
 # Defaults — Task(...) sem os novos campos continua valido
@@ -27,7 +27,6 @@ def test_task_legacy_kwargs_still_valid():
         id="t-2",
         title="Legacy",
         status=Status.IN_PROGRESS,
-        type=TaskType.DEV,
         deps=["t-1"],
         notes="nota",
         order_index=3,
@@ -64,7 +63,6 @@ def test_serialization_round_trip_preserves_new_fields(favorito, permanente):
         id="t-rt",
         title="Round trip",
         status=Status.DONE,
-        type=TaskType.HUMAN,
         deps=["a", "b"],
         notes="round trip",
         order_index=7,

@@ -32,7 +32,7 @@ def test_default_window_size_is_1400x900(qtbot):
     assert w.size() == QSize(1400, 900)
 
 
-def test_splitter_has_three_panels_with_351550_ratio(qtbot):
+def test_splitter_has_three_panels_with_updated_widths(qtbot):
     w = MainWindowShell()
     qtbot.addWidget(w)
     w.show()
@@ -41,9 +41,9 @@ def test_splitter_has_three_panels_with_351550_ratio(qtbot):
     assert splitter.count() == 3
     # Tolerância de ±5px por handleWidth e arredondamento Qt
     sizes = splitter.sizes()
-    assert abs(sizes[0] - 490) <= 8
-    assert abs(sizes[1] - 210) <= 8
-    assert abs(sizes[2] - 700) <= 8
+    assert abs(sizes[0] - 340) <= 8
+    assert abs(sizes[1] - 260) <= 8
+    assert abs(sizes[2] - 800) <= 8
 
 
 def test_initial_empty_states_visible(qtbot):
@@ -82,13 +82,13 @@ def test_middle_column_collapses_to_5_percent(qtbot):
     sizes = w._splitter.sizes()
     total = sum(sizes)
     assert w.is_middle_collapsed() is True
-    assert abs(sizes[0] / total - 0.35) < 0.04
+    assert abs(sizes[0] / total - 0.243) < 0.04
     assert abs(sizes[1] / total - 0.05) < 0.03
-    assert abs(sizes[2] / total - 0.60) < 0.04
+    assert abs(sizes[2] / total - 0.707) < 0.04
     w.set_middle_collapsed(False)
     sizes = w._splitter.sizes()
     total = sum(sizes)
-    assert abs(sizes[1] / total - 0.15) < 0.04
+    assert abs(sizes[1] / total - 0.186) < 0.04
 
 
 def test_subtask_pane_collapses_to_toggle_width_plus_lateral_padding(qtbot):

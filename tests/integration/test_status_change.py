@@ -16,7 +16,7 @@ import pytest
 
 from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Sector, Status, Task, TaskType
+from task_manager_desktop.core.models import Sector, Status, Task
 from task_manager_desktop.core.sector import compute_sector, count_open_deps
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
@@ -55,7 +55,7 @@ def ctrl(repo, mock_task_list, mock_main_window):
 def _task(id: str, title: str = "T", status: Status = Status.PENDING,
           deps: list[str] | None = None) -> Task:
     return Task(id=id, title=title, status=status,
-                type=TaskType.AGENT, deps=deps or [])
+                deps=deps or [])
 
 
 # ── US-004: mudança de status ─────────────────────────────────────────────────

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from task_manager_desktop.ui.editor_toolbar import EditorToolbar
 from task_manager_desktop.ui.markdown_editor import MarkdownEditor
-
 
 # ── MarkdownEditor ────────────────────────────────────────────────────────────
 
@@ -98,3 +96,14 @@ def test_toolbar_accessible_names(qtbot):
     qtbot.addWidget(toolbar)
     assert toolbar.btn_save.accessibleName() != ""
     assert toolbar.btn_cancel.accessibleName() != ""
+    assert toolbar.btn_reader_font_increase.accessibleName() != ""
+    assert toolbar.btn_reader_font_decrease.accessibleName() != ""
+
+
+def test_toolbar_replaces_reader_terminal_buttons_with_font_controls(qtbot):
+    toolbar = EditorToolbar()
+    qtbot.addWidget(toolbar)
+    assert not hasattr(toolbar, "btn_send_to_terminal")
+    assert not hasattr(toolbar, "btn_terminal_collapse")
+    assert toolbar.btn_reader_font_increase.text() == "+"
+    assert toolbar.btn_reader_font_decrease.text() == "-"

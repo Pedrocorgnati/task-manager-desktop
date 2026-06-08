@@ -13,6 +13,7 @@ def compute_sector(
     status: Status,
     has_open_deps: bool,
     permanente: bool = False,
+    em_preparacao: bool = False,
 ) -> tuple[Sector, str]:
     """Setor e cor de destaque canonicos para um status de task.
 
@@ -20,8 +21,11 @@ def compute_sector(
 
     Ordem canonica de avaliacao (estrita; nao inverter):
       1. Caminho permanente tem prioridade absoluta dentro de DONE.
-      2. Demais branches (DONE nao-permanente, IN_PROGRESS).
-      3. Default: PENDING.
+      2. DONE nao-permanente.
+      3. Flag manual `em_preparacao` (retem a task em EM_PREPARACAO enquanto
+         nao concluida), tendo prioridade sobre IN_PROGRESS/PENDING/BLOCKED.
+      4. IN_PROGRESS.
+      5. Default: PENDING (WAITING ou BLOCKED conforme deps).
 
     `permanente` so influencia o resultado quando `status == DONE`; com
     qualquer outro status a funcao retorna o setor que retornaria com
@@ -30,9 +34,12 @@ def compute_sector(
     # 1. Caminho permanente tem prioridade absoluta dentro de DONE.
     if status == Status.DONE and permanente:
         return Sector.PERMANENT, PERMANENT_ACCENT
-    # 2. Demais branches existentes.
+    # 2. DONE nao-permanente.
     if status == Status.DONE:
         return Sector.DONE, Color.NEUTRAL
+    # 3. Setor manual "Em preparação" (so para tasks nao concluidas).
+    if em_preparacao:
+        return Sector.EM_PREPARACAO, Color.GREEN
     if status == Status.IN_PROGRESS:
         return Sector.ACTIVE, Color.GRAY if has_open_deps else Color.GREEN
     # 3. Default: PENDING.

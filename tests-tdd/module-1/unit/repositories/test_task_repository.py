@@ -10,7 +10,7 @@ import sqlite3
 import pytest
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Task, TaskType
+from task_manager_desktop.core.models import Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
 
@@ -34,14 +34,13 @@ def _make_task(id: str = "abc", title: str = "T", **kw) -> Task:
 
 # TID-1-1-017 | covers: TASK-1/ST003 insert
 def test_insert_uses_bind_params_and_persists_all_fields(repo, conn):
-    """TaskRepository.insert usa bind ? e persiste todos os campos (id,title,type,deps,timestamps)."""
-    task = _make_task(id="abc", title="X", type=TaskType.HUMAN, deps=["dep1"])
+    """TaskRepository.insert usa bind ? e persiste todos os campos (id,title,deps,timestamps)."""
+    task = _make_task(id="abc", title="X", deps=["dep1"])
     repo.create(task)
 
     row = conn.execute("SELECT * FROM tasks WHERE id='abc'").fetchone()
     assert row is not None
     assert row["title"] == "X"
-    assert row["type"] == "human"
     assert row["deps"] == "dep1"
 
 
@@ -68,13 +67,12 @@ def test_exists_returns_true_when_present_false_otherwise(repo):
 
 # TID-1-2-019 | covers: TASK-2/ST003 update
 def test_update_applies_three_fields_via_bind_where_id(repo, conn):
-    """TaskRepository.update aplica UPDATE com 3 campos (title,type,deps) via bind ? WHERE id=?."""
-    repo.create(_make_task(id="u", title="orig", type=TaskType.AGENT))
-    repo.update("u", title="updated", type=TaskType.HUMAN, deps=["a", "b"])
+    """TaskRepository.update aplica UPDATE com 2 campos (title,deps) via bind ? WHERE id=?."""
+    repo.create(_make_task(id="u", title="orig"))
+    repo.update("u", title="updated", deps=["a", "b"])
 
     row = conn.execute("SELECT * FROM tasks WHERE id='u'").fetchone()
     assert row["title"] == "updated"
-    assert row["type"] == "human"
     assert row["deps"] == "a,b"
 
 

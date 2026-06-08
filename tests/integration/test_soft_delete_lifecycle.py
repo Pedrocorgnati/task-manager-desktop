@@ -21,7 +21,7 @@ from task_manager_desktop.core.cleanup import (
     run_cleanup_on_boot,
 )
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ def _task(id: str, title: str = "T", status: Status = Status.PENDING,
           completed_at: str | None = None) -> Task:
     return Task(
         id=id, title=title, status=status,
-        type=TaskType.AGENT, deps=[],
+        deps=[],
         completed_at=completed_at,
     )
 

@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from PySide6.QtCore import QByteArray, Qt, QTimer
 from PySide6.QtGui import QFont, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
@@ -11,6 +13,7 @@ from PySide6.QtWidgets import QApplication
 
 from .core.bootstrap import ensure_data_dir_and_db
 from .core.constants import PROPAGATION_THRESHOLD
+from .core.filters import is_active
 from .ui.dialogs import ErrorDialog
 from .ui.icons import APP_ICON_SVG
 from .ui.main_window import MainWindowShell
@@ -198,11 +201,21 @@ def main() -> None:
 
     window = MainWindowShell()
 
+    from PySide6.QtWidgets import QVBoxLayout, QWidget
+
     from .ui.header import HeaderBar
+    from .ui.top_cards_bar import TopCardsBar
 
     header = HeaderBar(window)
     header.install_shortcut(window)
-    window.set_header_widget(header)
+    top_cards_bar = TopCardsBar(window)
+    header_container = QWidget(window)
+    header_layout = QVBoxLayout(header_container)
+    header_layout.setContentsMargins(0, 0, 0, 0)
+    header_layout.setSpacing(0)
+    header_layout.addWidget(top_cards_bar)
+    header_layout.addWidget(header)
+    window.set_header_widget(header_container)
 
     from .ui.task_list import TaskList
 
@@ -210,7 +223,6 @@ def main() -> None:
     task_list.set_repo(repo)
     task_list.set_main_window(window)
     task_list.set_header_widget(header.take_primary_controls())
-    # Grid de test-mode ancorada como overlay no canto inferior direito da coluna 1.
     task_list.attach_test_mode_grid(header.take_test_mode_grid())
 
     from .controllers.change_status_controller import ChangeStatusController
@@ -244,6 +256,7 @@ def main() -> None:
                 changed.status,
                 has_open,
                 permanente=getattr(changed, "permanente", False),
+                em_preparacao=getattr(changed, "em_preparacao", False),
             )
             task_list.move_card_to_sector(task.id, new_sector.value)
         for dep_task_id, dep_sector, _ in propagated:
@@ -259,12 +272,279 @@ def main() -> None:
     delete_ctrl = DeleteTaskController(repo, task_list, window, parent=window)
     create_ctrl = CreateTaskController(repo, task_list, window, parent=window)
 
+    def _on_coin_toggle(task, value):
+        task_list.set_coin_favorite(task.id, bool(value))
+        return edit_ctrl.handle_favorite_toggle(task, value)
+
+    _PT_MONTHS = {
+        1: "jan", 2: "fev", 3: "mar", 4: "abr", 5: "mai", 6: "jun",
+        7: "jul", 8: "ago", 9: "set", 10: "out", 11: "nov", 12: "dez",
+    }
+
+    def _open_permanent_schedule_dialog(task, existing_due_at: str | None = None) -> int | None:
+        from PySide6.QtWidgets import (
+            QButtonGroup,
+            QDialog,
+            QFrame,
+            QHBoxLayout,
+            QLabel,
+            QPushButton,
+            QSpinBox,
+            QVBoxLayout,
+        )
+
+        options = [("1d", 1), ("3d", 3), ("1 semana", 7), ("15d", 15)]
+
+        dialog = QDialog(window)
+        dialog.setWindowTitle("Agendar acompanhamento")
+        dialog.setModal(True)
+        dialog.setMinimumWidth(420)
+        dialog.setProperty("testid", f"schedule-permanent-dialog-{task.id}")
+        dialog.setStyleSheet(
+            "QDialog { background: #111116; }"
+            "QLabel#dlgHead { font-size: 15px; font-weight: 700; color: #F8FAFC; }"
+            "QLabel#dlgSec  { font-size: 10px; font-weight: 700; color: #71717A; letter-spacing: 1px; }"
+            "QLabel#taskIdChip { font-size: 11px; font-weight: 700; color: #71717A; "
+            "  background: #1C1D24; border: 1px solid #3B3D46; border-radius: 5px; padding: 2px 7px; }"
+            "QPushButton#shortBtn { background: #1C1D24; border: 1px solid #3B3D46; border-radius: 6px; "
+            "  color: #A1A1AA; font-size: 12px; font-weight: 700; padding: 7px 14px; }"
+            "QPushButton#shortBtn:hover { background: #27272A; border-color: #FBBF24; color: #FBBF24; }"
+            "QPushButton#shortBtn:checked { background: rgba(251,191,36,0.15); "
+            "  border-color: #FBBF24; color: #FBBF24; }"
+            "QFrame#daysStepper { background: #17181D; border: 1px solid #363942; "
+            "  border-radius: 12px; }"
+            "QFrame#daysStepper:hover { border-color: #52525B; }"
+            "QPushButton#daysStepBtn { background: rgba(251,191,36,0.10); "
+            "  border: 1px solid rgba(251,191,36,0.35); border-radius: 10px; "
+            "  color: #FBBF24; font-size: 20px; font-weight: 900; padding: 0; }"
+            "QPushButton#daysStepBtn:hover { background: rgba(251,191,36,0.18); "
+            "  border-color: #FBBF24; color: #FDE68A; }"
+            "QPushButton#daysStepBtn:pressed { background: rgba(180,83,9,0.45); }"
+            "QSpinBox#daysInput { background: #0D0E12; border: 1px solid #2F3037; "
+            "  border-radius: 10px; color: #F8FAFC; font-size: 22px; font-weight: 900; "
+            "  selection-background-color: #FBBF24; selection-color: #0D0E12; padding: 4px 10px; }"
+            "QSpinBox#daysInput:focus { border-color: #FBBF24; }"
+            "QPushButton#okBtn { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "  stop:0 #B45309,stop:1 #FBBF24); border: none; border-radius: 8px; "
+            "  color: #0D0E12; font-size: 13px; font-weight: 700; padding: 9px 28px; }"
+            "QPushButton#okBtn:hover { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,"
+            "  stop:0 #FBBF24,stop:1 #FDE68A); }"
+            "QPushButton#cancelBtn { background: transparent; border: 1px solid #3B3D46; "
+            "  border-radius: 8px; color: #71717A; font-size: 13px; font-weight: 600; padding: 9px 20px; }"
+            "QPushButton#cancelBtn:hover { border-color: #71717A; color: #F8FAFC; }"
+            "QFrame#divider { background: #2F3037; max-height: 1px; border: none; }"
+            "QFrame#scheduleBadge { background: rgba(251,191,36,0.08); "
+            "  border: 1px solid rgba(251,191,36,0.30); border-radius: 10px; }"
+        )
+
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(24, 24, 24, 20)
+        layout.setSpacing(16)
+
+        # Header
+        head_row = QHBoxLayout()
+        head_row.setSpacing(10)
+        head_lbl = QLabel("Agendar acompanhamento", dialog)
+        head_lbl.setObjectName("dlgHead")
+        head_row.addWidget(head_lbl)
+        head_row.addStretch()
+        chip = QLabel(f"#{task.id}", dialog)
+        chip.setObjectName("taskIdChip")
+        head_row.addWidget(chip)
+        layout.addLayout(head_row)
+
+        div0 = QFrame(dialog)
+        div0.setObjectName("divider")
+        div0.setFrameShape(QFrame.Shape.HLine)
+        div0.setFixedHeight(1)
+        layout.addWidget(div0)
+
+        # Agendamento atual (badge) — só quando há schedule ativo
+        if existing_due_at:
+            try:
+                normalized = existing_due_at.replace("Z", "+00:00")
+                due_dt = datetime.fromisoformat(normalized).astimezone(timezone.utc)
+                days_left = max(0, (due_dt.date() - datetime.now(timezone.utc).date()).days)
+                date_str = f"{due_dt.day} {_PT_MONTHS[due_dt.month]} {due_dt.year}"
+
+                sec_lbl = QLabel("AGENDAMENTO ATUAL", dialog)
+                sec_lbl.setObjectName("dlgSec")
+                layout.addWidget(sec_lbl)
+
+                badge = QFrame(dialog)
+                badge.setObjectName("scheduleBadge")
+                badge_layout = QHBoxLayout(badge)
+                badge_layout.setContentsMargins(16, 12, 16, 12)
+                badge_layout.setSpacing(0)
+                days_lbl = QLabel(
+                    f"Retorna em {days_left} dia{'s' if days_left != 1 else ''}", badge
+                )
+                days_lbl.setStyleSheet(
+                    "font-size: 14px; font-weight: 700; color: #FBBF24; background: transparent;"
+                )
+                badge_layout.addWidget(days_lbl)
+                badge_layout.addStretch()
+                date_lbl = QLabel(date_str, badge)
+                date_lbl.setStyleSheet(
+                    "font-size: 11px; font-weight: 600; color: #78716C; background: transparent;"
+                )
+                badge_layout.addWidget(date_lbl)
+                layout.addWidget(badge)
+            except Exception:
+                pass
+
+        # Seção de intervalo
+        sec_lbl2 = QLabel("NOVO INTERVALO" if existing_due_at else "INTERVALO", dialog)
+        sec_lbl2.setObjectName("dlgSec")
+        layout.addWidget(sec_lbl2)
+
+        choices = QHBoxLayout()
+        choices.setSpacing(8)
+        group = QButtonGroup(dialog)
+        group.setExclusive(True)
+        for index, (label, days) in enumerate(options):
+            btn = QPushButton(label, dialog)
+            btn.setObjectName("shortBtn")
+            btn.setCheckable(True)
+            btn.setProperty("testid", f"schedule-option-{label}")
+            btn.setMinimumWidth(64)
+            group.addButton(btn, days)
+            choices.addWidget(btn)
+            if index == 0:
+                btn.setChecked(True)
+        choices.addStretch()
+        layout.addLayout(choices)
+
+        days_frame = QFrame(dialog)
+        days_frame.setObjectName("daysStepper")
+        days_frame.setProperty("testid", "schedule-days-stepper")
+        days_layout = QHBoxLayout(days_frame)
+        days_layout.setContentsMargins(12, 12, 12, 12)
+        days_layout.setSpacing(10)
+
+        days_plus_btn = QPushButton("+", days_frame)
+        days_plus_btn.setObjectName("daysStepBtn")
+        days_plus_btn.setProperty("testid", "schedule-days-increase")
+        days_plus_btn.setAccessibleName("Aumentar dias do acompanhamento")
+        days_plus_btn.setToolTip("Aumentar 1 dia")
+        days_plus_btn.setFixedSize(46, 44)
+        days_layout.addWidget(days_plus_btn)
+
+        days_input = QSpinBox(days_frame)
+        days_input.setObjectName("daysInput")
+        days_input.setProperty("testid", "schedule-days-input")
+        days_input.setAccessibleName("Quantidade de dias para acompanhamento")
+        days_input.setRange(1, 3650)
+        days_input.setValue(1)
+        days_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        days_input.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
+        days_input.setMinimumHeight(44)
+        days_input.setMinimumWidth(150)
+        days_layout.addWidget(days_input, 1)
+
+        days_minus_btn = QPushButton("-", days_frame)
+        days_minus_btn.setObjectName("daysStepBtn")
+        days_minus_btn.setProperty("testid", "schedule-days-decrease")
+        days_minus_btn.setAccessibleName("Diminuir dias do acompanhamento")
+        days_minus_btn.setToolTip("Diminuir 1 dia")
+        days_minus_btn.setFixedSize(46, 44)
+        days_layout.addWidget(days_minus_btn)
+
+        layout.addWidget(days_frame)
+
+        def _set_schedule_days(days: int) -> None:
+            days_input.setValue(max(days_input.minimum(), min(days_input.maximum(), days)))
+
+        group.idClicked.connect(_set_schedule_days)
+        days_plus_btn.clicked.connect(lambda: _set_schedule_days(days_input.value() + 1))
+        days_minus_btn.clicked.connect(lambda: _set_schedule_days(days_input.value() - 1))
+        days_input.valueChanged.connect(
+            lambda value: (
+                days_minus_btn.setEnabled(value > days_input.minimum()),
+                days_plus_btn.setEnabled(value < days_input.maximum()),
+            )
+        )
+        days_minus_btn.setEnabled(False)
+
+        layout.addStretch()
+
+        div1 = QFrame(dialog)
+        div1.setObjectName("divider")
+        div1.setFrameShape(QFrame.Shape.HLine)
+        div1.setFixedHeight(1)
+        layout.addWidget(div1)
+
+        btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
+        btn_row.addStretch()
+        cancel_btn = QPushButton("Cancelar", dialog)
+        cancel_btn.setObjectName("cancelBtn")
+        cancel_btn.setProperty("testid", "schedule-cancel")
+        cancel_btn.clicked.connect(dialog.reject)
+        btn_row.addWidget(cancel_btn)
+        ok_btn = QPushButton("Agendar", dialog)
+        ok_btn.setObjectName("okBtn")
+        ok_btn.setProperty("testid", "schedule-submit")
+        ok_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(ok_btn)
+        layout.addLayout(btn_row)
+
+        if dialog.exec() != int(QDialog.DialogCode.Accepted):
+            return None
+        return days_input.value()
+
+    def _on_schedule_permanent(task) -> bool:
+        if not getattr(task, "permanente", False):
+            return False
+        existing_due_at: str | None = None
+        try:
+            existing_due_at = repo.get_permanent_schedule(task.id)
+        except Exception:
+            pass
+        days = _open_permanent_schedule_dialog(task, existing_due_at)
+        if days is None:
+            return False
+        due_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+        try:
+            repo.schedule_permanent_task(task.id, due_at)
+        except Exception as exc:  # noqa: BLE001 - boundary de UI: mostra e loga
+            _logger.exception("permanent_schedule.create_failed task_id=%s", task.id)
+            ErrorDialog.show_io_error(window, exc, getattr(repo, "db_path", ""))
+            return False
+        task_list.refresh()
+        return True
+
+    def _on_toggle_preparacao(task) -> bool:
+        """Move o card para o setor "Em preparação" (flag manual em_preparacao).
+
+        Idempotente: marcar uma task ja em preparação apenas a mantem la. O
+        retorno ao fluxo normal acontece via qualquer botao de status do card
+        (ChangeStatusController zera a flag).
+        """
+        from task_manager_desktop.core.models import Status
+
+        if getattr(task, "status", None) == Status.DONE:
+            return False
+        try:
+            repo.update_em_preparacao(task.id, True)
+        except Exception as exc:  # noqa: BLE001 - boundary de UI: mostra e loga
+            _logger.exception("em_preparacao.set_failed task_id=%s", task.id)
+            ErrorDialog.show_io_error(window, exc, getattr(repo, "db_path", ""))
+            return False
+        task.em_preparacao = True
+        task_list.refresh()
+        return True
+
     callbacks = {
         "on_status_change": change_status_ctrl.handle,
+        "on_toggle_preparacao": _on_toggle_preparacao,
         "on_edit": edit_ctrl.handle_edit,
         "on_delete": delete_ctrl.handle,
         "on_title_save": edit_ctrl.handle_inline_title_edit,
         "on_favorite_toggle": edit_ctrl.handle_favorite_toggle,
+        "on_coin_toggle": _on_coin_toggle,
+        "is_coin_favorite": task_list.is_coin_favorite,
+        "on_schedule_permanent": _on_schedule_permanent,
     }
     task_list.set_callbacks(callbacks)
 
@@ -303,9 +583,14 @@ def main() -> None:
         header.set_clear_done_enabled(has_visible_done)
 
     def _apply_header_filters() -> None:
+        types = header.current_task_types()
         task_list.set_filters(
-            task_types=header.current_task_types(),
+            task_types=types,
         )
+        # O mesmo filtro de tipo do header governa a pane de subtasks (normal e
+        # Show All). subtask_pane e criado mais abaixo nesta mesma funcao; este
+        # closure so e invocado via signal apos o setup completo.
+        subtask_pane.set_type_filter(types)
         _reconcile_reader_visibility()
 
     header.type_filter_changed.connect(lambda _types: _apply_header_filters())
@@ -347,12 +632,44 @@ def main() -> None:
     # Load existing tasks
     task_list.refresh(repo.list_active())
 
+    def _trigger_due_permanent_schedules() -> None:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            changed = repo.trigger_due_permanent_schedules(now_iso)
+        except Exception:
+            _logger.exception("permanent_schedule.trigger_failed")
+            return
+        if changed:
+            task_list.refresh(repo.list_active())
+            _reconcile_reader_visibility()
+
+    _schedule_timer = QTimer(window)
+    _schedule_timer.setInterval(60_000)
+    _schedule_timer.timeout.connect(_trigger_due_permanent_schedules)
+    _schedule_timer.start()
+    QTimer.singleShot(0, _trigger_due_permanent_schedules)
+
     window.set_left_widget(task_list)
 
-    from .ui.subtask_pane import SubtaskPane
+    from .ui.subtask_pane import SubtaskClockPane
 
-    subtask_pane = SubtaskPane(repo, parent=window)
+    subtask_pane = SubtaskClockPane(repo, parent=window)
     window.set_middle_widget(subtask_pane)
+
+    # Criar/limpar subtasks pode mudar a visibilidade dos cards principais sob o
+    # filtro de tipo do header (um card so renderiza, com filtro ativo, se tiver
+    # subtask do tipo marcado). So reavalia a lista quando o filtro esta ATIVO:
+    # com os 3 tipos marcados a visibilidade do card independe das subtasks, e um
+    # rebuild seria churn desnecessario (perde a selecao do card atual).
+    def _on_subtasks_changed() -> None:
+        if not is_active(header.current_task_types()):
+            return
+        task_list.refresh(repo.list_active())
+        # O card selecionado pode ter deixado de casar o filtro (ex.: limpou a
+        # ultima subtask do tipo). Reconcilia o reader/subtask pane.
+        _reconcile_reader_visibility()
+
+    subtask_pane.set_on_subtasks_changed(_on_subtasks_changed)
 
     from PySide6.QtWidgets import QDockWidget, QSplitter, QVBoxLayout, QWidget
 
@@ -521,6 +838,18 @@ def main() -> None:
     task_list.task_selected.connect(_on_task_selected_for_reader)
     task_list.enter_pressed_on_selection.connect(_on_enter_pressed_on_task)
 
+    def _on_doc_file_requested(path: str) -> None:
+        """Abre um arquivo do SystemForge no leitor (modo documento, sem Task)."""
+        reader.show_document(path)
+
+    header.doc_file_requested.connect(_on_doc_file_requested)
+
+    # Apos salvar notas (save implicito ao trocar de card ou Ctrl+S), o reader
+    # persiste no banco mas o task_list mantem Task em cache. Sem reconciliar,
+    # re-selecionar o card re-emite o Task antigo e o editor recarrega o texto
+    # pre-edicao (bug "perco tudo que escrevo"). Esta linha sincroniza o cache.
+    reader.notes_saved.connect(task_list.sync_task_notes)
+
     def _on_switch_blocked(msg: str) -> None:
         try:
             from .ui.toast import ToastWidget
@@ -596,7 +925,7 @@ def main() -> None:
                     current_id,
                 )
 
-    # ── DataTest Debug Overlay (3 modos: all / body / buttons) ─────
+    # ── DataTest Debug Overlay (3 modos: main / body / buttons) ─────
     try:
         from .ui.debug_overlay import DataTestOverlay
 
@@ -617,7 +946,7 @@ def main() -> None:
         # Atalhos: cada um alterna seu modo (click no botao correspondente).
         # Usar toggle_test_mode mantem o estado dos botoes sincronizado.
         _sc_all = QShortcut(QKeySequence("Ctrl+Shift+D"), window)
-        _sc_all.activated.connect(lambda: header.toggle_test_mode("all"))
+        _sc_all.activated.connect(lambda: header.toggle_test_mode("main"))
 
         _sc_body = QShortcut(QKeySequence("Ctrl+Shift+B"), window)
         _sc_body.activated.connect(lambda: header.toggle_test_mode("body"))
@@ -626,7 +955,7 @@ def main() -> None:
         _sc_btn.activated.connect(lambda: header.toggle_test_mode("buttons"))
 
         print(
-            "[DataTest] Overlays ativados — Ctrl+Shift+D (all), "
+            "[DataTest] Overlays ativados — Ctrl+Shift+D (main), "
             "Ctrl+Shift+B (body), Ctrl+Shift+T (buttons)"
         )
     except Exception as exc:  # noqa: BLE001

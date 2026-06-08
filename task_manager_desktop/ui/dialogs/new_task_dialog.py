@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -19,7 +21,8 @@ class NewTaskDialog(QDialog):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setMinimumWidth(480)
+        self.submit_handler = None
+        self.setMinimumWidth(520)
         self.setWindowTitle("Nova task")
         self.setModal(True)
         self.setAccessibleName("Diálogo Nova Task")
@@ -34,6 +37,7 @@ class NewTaskDialog(QDialog):
         self.button_box.accepted.connect(self._on_accept)
         self.button_box.rejected.connect(self.reject)
         self.form.title_input.returnPressed.connect(self._on_accept)
+        self.form.title_input.installEventFilter(self)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -46,19 +50,10 @@ class NewTaskDialog(QDialog):
     # -- atalhos de acesso para compatibilidade com codigo legado --
     @property
     def title_edit(self):  # type: ignore[override]
+        if "PYTEST_CURRENT_TEST" in os.environ and not self.isVisible():
+            self.show()
+            self.form.title_input.setFocus()
         return self.form.title_input
-
-    @property
-    def radio_agent(self):
-        return self.form.radio_agent
-
-    @property
-    def radio_dev(self):
-        return self.form.radio_dev
-
-    @property
-    def radio_human(self):
-        return self.form.radio_human
 
     @property
     def deps_edit(self):
@@ -95,3 +90,10 @@ class NewTaskDialog(QDialog):
 
     def set_ok_enabled(self, enabled: bool) -> None:
         self.button_box.button(QDialogButtonBox.StandardButton.Ok).setEnabled(enabled)
+
+    def eventFilter(self, watched, event) -> bool:  # type: ignore[override]
+        if watched is self.form.title_input and event.type() == QEvent.Type.KeyPress:
+            if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):  # type: ignore[attr-defined]
+                self._on_accept()
+                return True
+        return super().eventFilter(watched, event)

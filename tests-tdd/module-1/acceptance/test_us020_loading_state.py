@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QDialog
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Task, TaskType
+from task_manager_desktop.core.models import Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
 
@@ -67,7 +67,6 @@ def test_ok_button_disabled_during_create_submit(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_create_dialog({
         "title": "Task X",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(repo, "create", check_create)
@@ -88,7 +87,7 @@ def test_save_button_disabled_during_edit_submit(_setup, monkeypatch, qtbot):
     """Botao Salvar do EditTaskDialog desabilitado durante update + WaitCursor."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Original", deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers.edit_task_controller import EditTaskController
@@ -105,7 +104,6 @@ def test_save_button_disabled_during_edit_submit(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Updated",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(repo, "update", check_update)

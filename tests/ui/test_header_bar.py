@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-import pytest
+from pathlib import Path
+
 from PySide6.QtWidgets import QCheckBox, QPushButton, QToolButton
 
+import task_manager_desktop.ui.header as header_module
 from task_manager_desktop.core.models import TaskType
 from task_manager_desktop.ui.header import HeaderBar
 
@@ -17,6 +19,20 @@ def test_layout_has_required_widgets(qtbot):
     assert isinstance(bar._btn_terminal_layout, QToolButton)
     assert isinstance(bar._btn_terminal_collapse, QToolButton)
     assert isinstance(bar._btn_trash, QToolButton)
+
+
+def test_docs_and_lessie_prompts_have_distinct_icons(qtbot):
+    # Os dois botoes vizinhos (documentos e prompts do Lessie) usavam o mesmo
+    # glifo; agora devem renderizar icones distintos.
+    from PySide6.QtCore import QSize
+
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    docs_img = bar._btn_docs.icon().pixmap(QSize(20, 20)).toImage()
+    lessie_img = bar._btn_lessie_prompts.icon().pixmap(QSize(20, 20)).toImage()
+    assert not docs_img.isNull()
+    assert not lessie_img.isNull()
+    assert docs_img != lessie_img
 
 
 def test_type_filter_defaults_to_all_selected(qtbot):
@@ -66,7 +82,7 @@ def test_terminal_collapse_button_emits(qtbot):
 def test_datatest_buttons_use_short_labels(qtbot):
     bar = HeaderBar()
     qtbot.addWidget(bar)
-    assert bar._btn_datatest.text() == "Data"
+    assert bar._btn_datatest.text() == "Main"
     assert bar._btn_bodytest.text() == "Body"
     assert bar._btn_btntest.text() == "Btn"
 
@@ -78,6 +94,28 @@ def test_datatest_terminal_checkbox_emits_toggle(qtbot):
         bar._datatest_terminal_checkbox.setChecked(True)
     assert blocker.args == [True]
     assert bar.is_terminal_write_enabled() is True
+
+
+def test_forge_pick_launches_from_systemforge_root(qtbot, monkeypatch):
+    calls = []
+
+    def fake_popen(args, **kwargs):
+        calls.append((args, kwargs))
+        return object()
+
+    monkeypatch.setattr(header_module.subprocess, "Popen", fake_popen)
+
+    bar = HeaderBar()
+    qtbot.addWidget(bar)
+    bar._open_forge_pick_tool()
+
+    expected_root = Path(header_module.__file__).resolve().parents[4]
+    assert calls == [
+        (
+            ["python3", str(expected_root / "ai-forge" / "forge-pick" / "app.py")],
+            {"cwd": str(expected_root), "start_new_session": True},
+        )
+    ]
 
 
 def test_ctrl_n_shortcut_registered(qtbot):

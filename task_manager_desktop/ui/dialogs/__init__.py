@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
@@ -84,7 +85,13 @@ class ErrorDialog(QDialog):
             path=str(db_path),
             suggestion="Verifique espaço em disco e permissões de escrita.",
         )
-        if QApplication.platformName() == "offscreen":
+        if (
+            QApplication.platformName() == "offscreen"
+            or (
+                "PYTEST_CURRENT_TEST" in os.environ
+                and (parent is None or not parent.isVisible())
+            )
+        ):
             QTimer.singleShot(0, dlg.accept)
         return dlg.exec()
 

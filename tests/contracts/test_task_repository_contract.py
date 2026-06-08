@@ -29,6 +29,7 @@ def test_task_repository_facade_exposes_nine_public_methods():
         "update_notes",        # added in intake-review TASK-1 (B1 MarkdownReader)
         "hide_all_done",       # added in intake-review TASK-4 (B5 TrashDialog + clear-done)
         "list_subtasks",
+        "subtask_types_by_task",  # added with subtask-based header-type-filter
         "create_subtask",
         "update_subtask_done",
         "update_subtask_state",
@@ -36,8 +37,17 @@ def test_task_repository_facade_exposes_nine_public_methods():
         "delete_done_subtasks",
         "update_subtask_notes",
         "update_subtask_text",  # added in hardening round 05-21 (fix #6)
+        "update_subtask_type",  # added with subtask type radio + icon (v9)
         "update_favorito",     # added in loop 05-20 TASK-008 (favorito/permanente)
         "update_permanente",   # added in loop 05-20 TASK-008 (favorito/permanente)
+        "update_em_preparacao",  # added with setor manual "Em preparação" (v8)
+        "list_clock_timers",
+        "create_clock_timer",
+        "update_clock_timer",
+        "delete_clock_timer",
+        "schedule_permanent_task",
+        "get_permanent_schedule",
+        "trigger_due_permanent_schedules",
     }
 
     public_methods = {

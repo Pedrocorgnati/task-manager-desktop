@@ -76,6 +76,30 @@ TRASH_SVG = (
     "</svg>"
 )
 
+CLOCK_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+    '<circle cx="12" cy="12" r="8.4" fill="#F8FAFC" fill-opacity="0.14" '
+    'stroke="#F8FAFC" stroke-width="1.9"/>'
+    '<path d="M12 7.2v5.1l3.5 2.1" stroke="#F8FAFC" stroke-width="2" '
+    'stroke-linecap="round" stroke-linejoin="round"/>'
+    '<path d="M7.2 3.9 4.8 6.2M16.8 3.9l2.4 2.3" '
+    'stroke="#F8FAFC" stroke-width="1.8" stroke-linecap="round"/>'
+    "</svg>"
+)
+
+# Icone 1:1 do botao "Em preparação": prancheta com linhas (estrategia sendo
+# escrita). Tracos brancos para casar com os demais icones de acao do card.
+STRATEGY_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+    '<rect x="5" y="4.5" width="14" height="16" rx="2.2" '
+    'fill="#F8FAFC" fill-opacity="0.14" stroke="#F8FAFC" stroke-width="1.8"/>'
+    '<rect x="9" y="2.8" width="6" height="3.4" rx="1.1" '
+    'fill="#F8FAFC" fill-opacity="0.22" stroke="#F8FAFC" stroke-width="1.6"/>'
+    '<path d="M8.4 10.5h7.2M8.4 13.7h7.2M8.4 16.9h4.4" '
+    'stroke="#F8FAFC" stroke-width="1.8" stroke-linecap="round"/>'
+    "</svg>"
+)
+
 PENCIL_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
     f'<path d="M4 16.8V20h3.2L18.7 8.5l-3.2-3.2L4 16.8Z" '
@@ -144,6 +168,24 @@ STAR_OUTLINE_SVG = (
     "</svg>"
 )
 
+COIN_FILLED_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+    '<circle cx="12" cy="12" r="8.3" fill="#FDE68A" stroke="#F59E0B" stroke-width="1.7"/>'
+    '<path d="M9.3 9.1h5.2a1.9 1.9 0 0 1 0 3.8H10.2a1.9 1.9 0 0 0 0 3.8h4.9" '
+    'stroke="#B45309" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>'
+    '<path d="M12 7.6v8.8" stroke="#B45309" stroke-width="1.6" stroke-linecap="round"/>'
+    "</svg>"
+)
+
+COIN_OUTLINE_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+    ' stroke="#A1A1AA" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'
+    '<circle cx="12" cy="12" r="8.2"/>'
+    '<path d="M9.3 9.1h5.2a1.9 1.9 0 0 1 0 3.8H10.2a1.9 1.9 0 0 0 0 3.8h4.9"/>'
+    '<path d="M12 7.6v8.8"/>'
+    "</svg>"
+)
+
 BROOM_SVG = """\
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
   <path d="M14.7 3.4 21 9.7" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round"/>
@@ -163,6 +205,48 @@ LAYOUT_STACK_SVG = """\
         fill="#F8FAFC" fill-opacity="0.14" stroke="#D4D4D8" stroke-width="1.4"/>
   <path d="M4.2 12.3c.8-3.3 2.8-5.2 6-5.8" stroke="#D4D4D8" stroke-width="1.5" stroke-linecap="round"/>
   <path d="m10.5 4.7 2.7 1.9-2.7 1.9" stroke="#D4D4D8" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
+"""
+
+TOOLS_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <path d="M14.4 4.2a4.2 4.2 0 0 0 5.4 5.4l-4.1 4.1-2.6-2.6 1.3-1.3-1.8-1.8-7 7a1.8 1.8 0 1 0 2.6 2.6l7-7-1.8-1.8 1.3-1.3 2.6 2.6 4.1-4.1a4.2 4.2 0 0 0-5.4-5.4l2.1 2.1-2.4 2.4-2.1-2.1Z"
+        fill="#F8FAFC" fill-opacity="0.14" stroke="#F8FAFC" stroke-width="1.5" stroke-linejoin="round"/>
+</svg>
+"""
+
+# Icone do botao de documentos do header (atalhos para arquivos do SystemForge).
+# Folha de papel com cabecalho dobrado e linhas de texto, tracos brancos para
+# casar com TOOLS_SVG/LAYOUT_STACK_SVG ao lado.
+DOCUMENT_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <path d="M6 3.2h7.2L19 9v10.6a1.6 1.6 0 0 1-1.6 1.6H6a1.6 1.6 0 0 1-1.6-1.6V4.8A1.6 1.6 0 0 1 6 3.2Z"
+        fill="#F8FAFC" fill-opacity="0.14" stroke="#F8FAFC" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M13 3.4V9h5.6" stroke="#F8FAFC" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M8 12.6h8M8 15.6h8M8 18.6h5" stroke="#F8FAFC" stroke-width="1.6" stroke-linecap="round"/>
+</svg>
+"""
+
+# Icone do botao de prompts do Lessie no header. Balao de conversa com linhas de
+# texto e um brilho (sparkle) no canto, sinalizando prompts de IA. Tracos
+# brancos para casar com DOCUMENT_SVG/TOOLS_SVG ao lado, mas com silhueta
+# distinta (balao != folha) para nao colidir com o botao de documentos.
+PROMPT_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <path d="M4.4 5.2h10.4a1.6 1.6 0 0 1 1.6 1.6v6a1.6 1.6 0 0 1-1.6 1.6H9.1l-3.8 3.1v-3.1h-.9a1.6 1.6 0 0 1-1.6-1.6v-6A1.6 1.6 0 0 1 4.4 5.2Z"
+        fill="#F8FAFC" fill-opacity="0.14" stroke="#F8FAFC" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M6.6 8.6h7M6.6 11.2h4.4" stroke="#F8FAFC" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M19 3.1l.66 1.63 1.64.66-1.64.66L19 8.28l-.66-1.63-1.64-.66 1.64-.66Z"
+        fill="#F8FAFC" stroke="#F8FAFC" stroke-width="0.7" stroke-linejoin="round"/>
+</svg>
+"""
+
+SEND_ARROW_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <path d="M4.1 11.7 20 4.5 12.8 20.4l-2.3-7.1-6.4-1.6Z"
+        fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="m10.7 13.1 4.4-4.3" stroke="#2563EB" stroke-width="1.7"
+        stroke-linecap="round"/>
 </svg>
 """
 
@@ -231,6 +315,31 @@ COMPUTER_SVG = """\
   <line x1="12" y1="16.8" x2="12" y2="20"/>
 </svg>
 """
+
+
+# Mapa canonico tipo-de-task -> SVG do icone. Fonte unica consumida pelo card
+# principal (TaskCard) e pelo card de subtask (_SubtaskRow), garantindo que o
+# icone de tipo seja identico nos dois lugares.
+def type_icon_svg(task_type) -> str:
+    """Retorna o SVG do icone para o tipo de task/subtask informado.
+
+    Aceita TaskType ou a string canonica ('agent'/'dev'/'human'). Importa
+    TaskType de forma tardia para evitar acoplar icons.py ao modulo de modelos
+    no import-time. Valores desconhecidos caem no icone de AGENT.
+    """
+    from task_manager_desktop.core.models import TaskType
+
+    mapping = {
+        TaskType.AGENT: ROBOT_SVG,
+        TaskType.DEV: COMPUTER_SVG,
+        TaskType.HUMAN: PROFILE_SVG,
+    }
+    if not isinstance(task_type, TaskType):
+        try:
+            task_type = TaskType(task_type)
+        except ValueError:
+            task_type = TaskType.AGENT
+    return mapping.get(task_type, ROBOT_SVG)
 
 
 def svg_to_icon(svg: str, size: int = 20):

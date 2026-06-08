@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog
 
 from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Sector, Task, TaskType
+from task_manager_desktop.core.models import Sector, Task
 from task_manager_desktop.core.sector import compute_sector, count_open_deps
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
@@ -47,15 +47,14 @@ def test_edit_task_controller_happy_path_end_to_end(setup, monkeypatch):
     dialog -> resolve_cycles -> filtra deps -> update -> recalc setor self + dependentes diretos."""
     ctrl, repo, conn, db_path = setup
 
-    dep = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
-    main = Task(id="main", title="Main", type=TaskType.AGENT, deps=[])
+    dep = Task(id="dep1", title="Dep", deps=[])
+    main = Task(id="main", title="Main", deps=[])
     repo.create(dep)
     repo.create(main)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Main editada",
-        "type": TaskType.HUMAN,
         "deps": ["dep1"],
     }))
 
@@ -64,7 +63,6 @@ def test_edit_task_controller_happy_path_end_to_end(setup, monkeypatch):
     tasks = repo.list_active()
     updated = next(t for t in tasks if t.id == "main")
     assert updated.title == "Main editada"
-    assert updated.type == TaskType.HUMAN
     assert "dep1" in updated.deps
 
     all_tasks = {t.id: t for t in tasks}
@@ -79,9 +77,9 @@ def test_edit_task_controller_recompute_only_one_level_deep(setup, monkeypatch):
     que depende de A (verifica ausencia de DFS)."""
     ctrl, repo, conn, db_path = setup
 
-    a = Task(id="a", title="A", type=TaskType.AGENT, deps=[])
-    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["a"])
-    c = Task(id="c", title="C", type=TaskType.AGENT, deps=["b"])
+    a = Task(id="a", title="A", deps=[])
+    b = Task(id="b", title="B", deps=["a"])
+    c = Task(id="c", title="C", deps=["b"])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -89,7 +87,6 @@ def test_edit_task_controller_recompute_only_one_level_deep(setup, monkeypatch):
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "A editada",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 

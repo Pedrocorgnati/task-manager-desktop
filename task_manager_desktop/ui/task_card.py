@@ -13,9 +13,10 @@ from PySide6.QtCore import (
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QFontMetrics
+from PySide6.QtGui import QColor, QFontMetrics
 from PySide6.QtWidgets import (
     QFrame,
+    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
@@ -28,31 +29,28 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.core.sector import PERMANENT_ACCENT, count_open_deps
 from task_manager_desktop.ui.icons import (
-    COMPUTER_SVG,
+    CLOCK_SVG,
+    COIN_FILLED_SVG,
+    COIN_OUTLINE_SVG,
     PENCIL_WHITE_SVG,
-    PROFILE_SVG,
-    ROBOT_SVG,
     STAR_FILLED_SVG,
     STAR_OUTLINE_SVG,
+    STRATEGY_SVG,
     TRASH_SVG,
     svg_to_icon,
-    svg_to_pixmap,
 )
 from task_manager_desktop.ui.widgets.status_segmented_control import (
     CONTROL_HEIGHT as _STATUS_HEIGHT,
+)
+from task_manager_desktop.ui.widgets.status_segmented_control import (
     CONTROL_WIDTH as _STATUS_WIDTH,
+)
+from task_manager_desktop.ui.widgets.status_segmented_control import (
     StatusSegmentedControl,
 )
-
-# Icone por tipo de task — substitui a badge textual AGENT/DEV/HUMAN.
-_TYPE_ICON_SVG: dict[TaskType, str] = {
-    TaskType.AGENT: ROBOT_SVG,
-    TaskType.DEV: COMPUTER_SVG,
-    TaskType.HUMAN: PROFILE_SVG,
-}
 
 # CL-073: INTAKE diz "card verde #16a34a"; mantemos bg #14532D + accent #16A34A para garantir contraste WCAG do texto. Hex de referencia preservado como accent.
 _CARD_STYLE: dict[str, dict[str, str]] = {
@@ -65,6 +63,18 @@ _CARD_STYLE: dict[str, dict[str, str]] = {
         "chip_bg": "rgba(5, 46, 22, 0.55)",
         "chip_text": "#DCFCE7",
         "deps": "#BBF7D0",
+    },
+    "preparing": {
+        # Tom verde claro: a task aguarda sua estrategia ser escrita antes de
+        # ir para "Em execução". Texto escuro para contraste WCAG sobre claro.
+        "bg": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #86EFAC, stop:1 #4ADE80)",
+        "hover": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #BBF7D0, stop:1 #86EFAC)",
+        "accent": "#16A34A",
+        "title": "#0B3D20",
+        "meta": "#14532D",
+        "chip_bg": "rgba(20, 83, 45, 0.16)",
+        "chip_text": "#14532D",
+        "deps": "#14532D",
     },
     "waiting": {
         "bg": "qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #FACC15, stop:1 #D97706)",
@@ -149,6 +159,19 @@ class TaskCard(QFrame):
         self._fav_watchdog.setSingleShot(True)
         self._fav_watchdog.setInterval(_STAR_IN_FLIGHT_WATCHDOG_MS)
         self._fav_watchdog.timeout.connect(self._on_favorite_watchdog_fired)
+        self._coin_pending_value = bool(
+            self._callbacks.get("is_coin_favorite", lambda _tid: False)(task.id)
+        )
+        self._coin_syncing = False
+        self._coin_in_flight = False
+        self._coin_debounce = QTimer(self)
+        self._coin_debounce.setSingleShot(True)
+        self._coin_debounce.setInterval(_FAVORITO_DEBOUNCE_MS)
+        self._coin_debounce.timeout.connect(self._on_coin_debounce_fired)
+        self._coin_watchdog = QTimer(self)
+        self._coin_watchdog.setSingleShot(True)
+        self._coin_watchdog.setInterval(_STAR_IN_FLIGHT_WATCHDOG_MS)
+        self._coin_watchdog.timeout.connect(self._on_coin_watchdog_fired)
 
         self.setObjectName("taskCard")
         self.setProperty("testid", f"task-card-{task.id}")
@@ -159,6 +182,7 @@ class TaskCard(QFrame):
         self.setAccessibleName(f"Task {task.id}")
         self.setAccessibleDescription(f"{task.title}, {task.status.value}")
 
+        self._has_active_schedule: bool = False
         self._build_ui()
         self._apply_card_style()
 
@@ -166,6 +190,10 @@ class TaskCard(QFrame):
         open_deps = count_open_deps(self._task.deps, self._all_tasks)
         if self._task.status == Status.DONE:
             return "done"
+        # Flag manual tem prioridade sobre blocked/active/waiting (espelha
+        # compute_sector), mas nunca sobre done.
+        if getattr(self._task, "em_preparacao", False):
+            return "preparing"
         if open_deps > 0:
             return "blocked"
         if self._task.status == Status.IN_PROGRESS:
@@ -184,7 +212,7 @@ class TaskCard(QFrame):
         self._content_col.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._content_col.setStyleSheet("background: transparent;")
         outer = QVBoxLayout(self._content_col)
-        outer.setContentsMargins(12, 5, 8, 5)
+        outer.setContentsMargins(9, 5, 6, 5)
         outer.setSpacing(2)
         root.addWidget(self._content_col, 95)
 
@@ -193,7 +221,7 @@ class TaskCard(QFrame):
         self._top_row.setObjectName("taskCardTopRow")
         top_row = QHBoxLayout(self._top_row)
         top_row.setContentsMargins(0, 0, 0, 0)
-        top_row.setSpacing(7)
+        top_row.setSpacing(5)
 
         # Linha 2 (titulo).
         self._middle_row = QWidget(self._content_col)
@@ -235,38 +263,41 @@ class TaskCard(QFrame):
         self._refresh_star_icon()
         self._set_star_pending(False)
 
-        # Icone de tipo — primeira posicao da primeira linha.
-        self._type_icon = QLabel(self)
-        self._type_icon.setObjectName("cardTypeChip")
-        self._type_icon.setProperty("testid", f"task-card-{self._task.id}-type")
-        self._type_icon.setFixedSize(20, 18)
-        self._type_icon.setStyleSheet("background: transparent;")
-        self._type_icon.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        self._coin_btn = QToolButton(self._top_row)
+        self._coin_btn.setObjectName("cardFavoriteCoin")
+        self._coin_btn.setProperty("testid", f"task-card-{self._task.id}-favorito-moeda")
+        self._coin_btn.setCheckable(True)
+        self._coin_btn.setChecked(self._coin_pending_value)
+        self._coin_btn.setIconSize(QSize(16, 16))
+        self._coin_btn.setFixedSize(20, 20)
+        self._coin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._coin_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._coin_btn.setAccessibleName("Marcar moeda favorita")
+        self._coin_btn.setStyleSheet(
+            "QToolButton#cardFavoriteCoin {"
+            "background: transparent; border: none; padding: 0;"
+            "}"
+            "QToolButton#cardFavoriteCoin:focus {"
+            "border: 1px solid rgba(255,255,255,0.55); border-radius: 6px;"
+            "}"
         )
-        top_row.addWidget(self._type_icon)
+        self._coin_opacity = QGraphicsOpacityEffect(self._coin_btn)
+        self._coin_opacity.setOpacity(1.0)
+        self._coin_btn.setGraphicsEffect(self._coin_opacity)
+        self._coin_btn.toggled.connect(self._on_coin_toggled)
+        top_row.addWidget(self._coin_btn)
+        self._refresh_coin_icon()
+        self._set_coin_pending(False)
+
+        # O card principal NAO exibe mais o tipo (agent/dev/human): esse marcador
+        # passou a viver nas subtasks (cada task tem partes de tipos distintos).
+        # O filtro header-type-filter agora atua via a existencia de subtasks do
+        # tipo selecionado, nao via um tipo unico da task.
 
         self._id_label = QLabel(f"#{self._task.id}", self)
         self._id_label.setObjectName("cardId")
         self._id_label.setProperty("testid", f"task-card-{self._task.id}-id")
         top_row.addWidget(self._id_label)
-
-        # Badge textual redundante a borda azul do setor Permanentes
-        # (source.md rejeicao #9: cor sozinha nao sinaliza estado).
-        self._perm_badge = QLabel("PERM", self._top_row)
-        self._perm_badge.setObjectName("cardPermanenteBadge")
-        self._perm_badge.setProperty(
-            "testid", f"task-card-{self._task.id}-permanente-badge"
-        )
-        self._perm_badge.setStyleSheet(
-            f"background: {PERMANENT_ACCENT}; color: #FFFFFF; font-size: 9px; "
-            "font-weight: 800; letter-spacing: 0.5px; border-radius: 4px; "
-            "padding: 1px 5px;"
-        )
-        self._perm_badge.setToolTip("Task permanente: não some ao concluir")
-        self._perm_badge.setAccessibleName("Task permanente")
-        self._perm_badge.setVisible(self._task.permanente)
-        top_row.addWidget(self._perm_badge)
 
         self._deps_label = QLabel(self)
         self._deps_label.setObjectName("cardDeps")
@@ -296,6 +327,34 @@ class TaskCard(QFrame):
         self._edit_btn.setAccessibleName(f"Editar task {self._task.id}")
         self._edit_btn.clicked.connect(self._handle_edit)
         actions_layout.addWidget(self._edit_btn)
+
+        self._schedule_btn = QToolButton(self._actions_row)
+        self._schedule_btn.setObjectName("cardActionSchedule")
+        self._schedule_btn.setProperty("testid", f"task-card-{self._task.id}-schedule")
+        self._schedule_btn.setIcon(svg_to_icon(CLOCK_SVG, 16))
+        self._schedule_btn.setIconSize(QSize(16, 16))
+        self._schedule_btn.setFixedSize(22, 22)
+        self._schedule_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._schedule_btn.setAccessibleName(f"Agendar task permanente {self._task.id}")
+        self._schedule_btn.setToolTip("Agendar acompanhamento")
+        self._schedule_btn.setVisible(self._task.permanente)
+        self._schedule_btn.clicked.connect(self._handle_schedule)
+        actions_layout.addWidget(self._schedule_btn)
+
+        # Botao "Em preparação" — ao lado do schedule. Move o card para o setor
+        # verde claro enquanto sua estrategia e escrita. Icone 1:1 (16x16).
+        self._prepare_btn = QToolButton(self._actions_row)
+        self._prepare_btn.setObjectName("cardActionPrepare")
+        self._prepare_btn.setProperty("testid", f"task-card-{self._task.id}-prepare")
+        self._prepare_btn.setIcon(svg_to_icon(STRATEGY_SVG, 16))
+        self._prepare_btn.setIconSize(QSize(16, 16))
+        self._prepare_btn.setFixedSize(22, 22)
+        self._prepare_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._prepare_btn.setAccessibleName(f"Mover task {self._task.id} para Em preparação")
+        self._prepare_btn.setToolTip("Mover para Em preparação")
+        self._prepare_btn.setVisible(self._prepare_allowed())
+        self._prepare_btn.clicked.connect(self._handle_prepare)
+        actions_layout.addWidget(self._prepare_btn)
 
         self._delete_btn = QToolButton(self._actions_row)
         self._delete_btn.setObjectName("cardActionDelete")
@@ -361,12 +420,9 @@ class TaskCard(QFrame):
         self._title_label.setText(self._task.title)
         self._title_label.setToolTip(self._task.title)
 
-        self._type_icon.setPixmap(svg_to_pixmap(_TYPE_ICON_SVG[self._task.type], 16))
-        self._type_icon.setToolTip(self._task.type.value)
-
         if self._task.deps:
             deps_text = "deps: " + ", ".join(self._task.deps)
-            self._deps_label.setText(fm.elidedText(deps_text, Qt.TextElideMode.ElideRight, 260))
+            self._deps_label.setText(fm.elidedText(deps_text, Qt.TextElideMode.ElideRight, 120))
             self._deps_label.setToolTip(deps_text)
             self._deps_label.show()
         else:
@@ -466,6 +522,69 @@ class TaskCard(QFrame):
         # para o estado persistido, sem autosave silencioso (source.md rejeicao #10).
         self._rollback_star()
 
+    def _refresh_coin_icon(self) -> None:
+        checked = self._coin_btn.isChecked()
+        svg = COIN_FILLED_SVG if checked else COIN_OUTLINE_SVG
+        self._coin_btn.setIcon(svg_to_icon(svg, 16))
+        self._coin_btn.setAccessibleDescription("Moeda favorita" if checked else "Moeda não favorita")
+
+    def _set_coin_pending(self, pending: bool) -> None:
+        self._coin_opacity.setOpacity(_STAR_PENDING_OPACITY if pending else 1.0)
+        self._coin_btn.setToolTip("Salvando moeda..." if pending else "Favoritar com moeda")
+
+    def _set_coin_in_flight(self, in_flight: bool) -> None:
+        self._coin_in_flight = in_flight
+        self._coin_btn.setEnabled(not in_flight)
+        if in_flight:
+            self._coin_watchdog.start()
+        else:
+            self._coin_watchdog.stop()
+
+    def _on_coin_watchdog_fired(self) -> None:
+        if not self._coin_in_flight:
+            return
+        _log.error(
+            "coin.autosave_watchdog_timeout: request in-flight nao resolveu "
+            "em %d ms; forcando rollback da moeda (task_id=%s)",
+            _STAR_IN_FLIGHT_WATCHDOG_MS,
+            self._task.id,
+        )
+        self._rollback_coin()
+
+    def _on_coin_toggled(self, checked: bool) -> None:
+        if self._coin_syncing or self._coin_in_flight:
+            return
+        self._coin_pending_value = checked
+        self._refresh_coin_icon()
+        self._set_coin_pending(True)
+        self._coin_debounce.start()
+
+    def _on_coin_debounce_fired(self) -> None:
+        self._set_coin_in_flight(True)
+        cb = self._callbacks.get("on_coin_toggle")
+        if cb is None:
+            self._rollback_coin()
+            return
+        ok = cb(self._task, self._coin_pending_value)
+        if ok:
+            return
+        self._rollback_coin()
+
+    def _rollback_coin(self) -> None:
+        self._coin_syncing = True
+        try:
+            persisted = bool(
+                self._callbacks.get("is_coin_favorite", lambda _tid: False)(self._task.id)
+            )
+            with QSignalBlocker(self._coin_btn):
+                self._coin_btn.setChecked(persisted)
+        finally:
+            self._coin_syncing = False
+        self._coin_pending_value = self._coin_btn.isChecked()
+        self._refresh_coin_icon()
+        self._set_coin_pending(False)
+        self._set_coin_in_flight(False)
+
     def _rollback_star(self) -> None:
         """Reverte a estrela ao valor persistido da task, sem disparar autosave."""
         self._fav_syncing = True
@@ -486,14 +605,34 @@ class TaskCard(QFrame):
         style = _CARD_STYLE[state]
         selected_border = "border-left: 3px solid #FFFFFF;" if self._selected else ""
         # Task permanente: a marca fica APENAS no detalhe azul da borda
-        # esquerda (7px). A borda externa azul em volta era redundante ao
-        # badge "PERM" (source.md rejeicao #9) e foi removida — o contorno
-        # externo e o mesmo neutro das demais tasks.
+        # esquerda (7px). O contorno externo e o mesmo neutro das
+        # demais tasks.
         outer_border = "border: 1px solid rgba(255,255,255,0.09);"
         if self._task.permanente:
             left_border = f"border-left: 7px solid {PERMANENT_ACCENT};"
         else:
             left_border = f"border-left: 7px solid {style['accent']};"
+        _schedule_active_css = (
+            "QToolButton#cardActionSchedule {"
+            "background: rgba(251,191,36,0.22);"
+            "border: 1px solid rgba(251,191,36,0.55);"
+            "border-radius: 8px; padding: 2px;"
+            "}"
+            "QToolButton#cardActionSchedule:hover {"
+            "background: rgba(251,191,36,0.42);"
+            "border: 1px solid rgba(251,191,36,0.90);"
+            "}"
+        ) if self._has_active_schedule else (
+            "QToolButton#cardActionSchedule {"
+            "background: rgba(5,6,8,0.72);"
+            "border: 1px solid rgba(255,255,255,0.18);"
+            "border-radius: 8px; padding: 2px;"
+            "}"
+            "QToolButton#cardActionSchedule:hover {"
+            "background: rgba(255,255,255,0.18);"
+            "border: 1px solid rgba(255,255,255,0.42);"
+            "}"
+        )
         self.setStyleSheet(
             "QFrame#taskCard { /* legacy-border #3F3F46 */"
             f"background: {style['bg']};"
@@ -505,16 +644,19 @@ class TaskCard(QFrame):
             "QFrame#taskCard:hover {"
             f"background: {style['hover']};"
             "}"
-            "QToolButton#cardActionEdit, QToolButton#cardActionDelete {"
+            "QToolButton#cardActionEdit, QToolButton#cardActionDelete, "
+            "QToolButton#cardActionPrepare {"
             "background: rgba(5,6,8,0.72);"
             "border: 1px solid rgba(255,255,255,0.18);"
             "border-radius: 8px;"
             "padding: 2px;"
             "}"
-            "QToolButton#cardActionEdit:hover, QToolButton#cardActionDelete:hover {"
+            "QToolButton#cardActionEdit:hover, QToolButton#cardActionDelete:hover, "
+            "QToolButton#cardActionPrepare:hover {"
             "background: rgba(255,255,255,0.18);"
             "border: 1px solid rgba(255,255,255,0.42);"
             "}"
+            + _schedule_active_css
         )
         self._id_label.setStyleSheet(
             f"font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace; font-size: 12px; "
@@ -572,8 +714,27 @@ class TaskCard(QFrame):
                 return True
         return super().eventFilter(watched, event)
 
+    def set_schedule_active(self, due_at: str | None) -> None:
+        self._has_active_schedule = due_at is not None
+        self._apply_card_style()
+        if self._has_active_schedule and self._task.permanente:
+            self._actions_row.setVisible(True)
+            self._schedule_btn.setVisible(True)
+
     def _set_hover_actions_visible(self, visible: bool) -> None:
-        self._actions_row.setVisible(visible)
+        if self._has_active_schedule and self._task.permanente:
+            self._actions_row.setVisible(True)
+            self._edit_btn.setVisible(visible)
+            self._delete_btn.setVisible(visible)
+            self._schedule_btn.setVisible(True)
+            self._prepare_btn.setVisible(visible and self._prepare_allowed())
+        else:
+            self._actions_row.setVisible(visible)
+            if visible:
+                self._edit_btn.setVisible(True)
+                self._delete_btn.setVisible(True)
+                self._schedule_btn.setVisible(self._task.permanente)
+                self._prepare_btn.setVisible(self._prepare_allowed())
 
     def _handle_edit(self) -> None:
         cb = self._callbacks.get("on_edit")
@@ -585,10 +746,42 @@ class TaskCard(QFrame):
         if cb:
             cb(self._task)
 
+    def _handle_schedule(self) -> None:
+        cb = self._callbacks.get("on_schedule_permanent")
+        if cb:
+            cb(self._task)
+
+    def _prepare_allowed(self) -> bool:
+        """O botao "Em preparação" so faz sentido em tasks nao concluidas."""
+        return self._task.status != Status.DONE
+
+    def _handle_prepare(self) -> None:
+        cb = self._callbacks.get("on_toggle_preparacao")
+        if cb:
+            cb(self._task)
+
     def set_selected(self, selected: bool) -> None:
         self._selected = selected
         self.setProperty("selected", selected)
+        self._apply_selected_glow(selected)
         self._apply_card_style()
+
+    def _apply_selected_glow(self, selected: bool) -> None:
+        """Halo branco no card selecionado (o que esta renderizando as subtasks).
+
+        Alem da faixa branca a esquerda (border-left), o card selecionado ganha
+        um QGraphicsDropShadowEffect branco com offset zero — um glow suave que
+        o destaca dos demais. Removido ao deselecionar para nao acumular efeitos
+        (um QWidget so comporta um QGraphicsEffect por vez).
+        """
+        if selected:
+            glow = QGraphicsDropShadowEffect(self)
+            glow.setBlurRadius(20)
+            glow.setColor(QColor(255, 255, 255, 180))
+            glow.setOffset(0, 0)
+            self.setGraphicsEffect(glow)
+        else:
+            self.setGraphicsEffect(None)
 
     def _on_status_change(self, new_status: str) -> None:
         cb = self._callbacks.get("on_status_change")
@@ -659,22 +852,34 @@ class TaskCard(QFrame):
         self._actions_row.setProperty("testid", f"task-card-{task.id}-actions")
         self._edit_btn.setProperty("testid", f"task-card-{task.id}-edit")
         self._edit_btn.setAccessibleName(f"Editar task {task.id}")
+        self._schedule_btn.setProperty("testid", f"task-card-{task.id}-schedule")
+        self._schedule_btn.setAccessibleName(f"Agendar task permanente {task.id}")
+        self._schedule_btn.setVisible(task.permanente)
         self._delete_btn.setProperty("testid", f"task-card-{task.id}-delete")
         self._delete_btn.setAccessibleName(f"Excluir task {task.id}")
         self._title_edit.setProperty("testid", f"task-card-{task.id}-title-edit")
         self._star_btn.setProperty("testid", f"task-card-{task.id}-favorito")
-        self._perm_badge.setProperty("testid", f"task-card-{task.id}-permanente-badge")
+        self._coin_btn.setProperty("testid", f"task-card-{task.id}-favorito-moeda")
         self._id_label.setText(f"#{task.id}")
         # Re-sincroniza a estrela com a task recarregada sem disparar autosave
         # e cancela qualquer debounce/lockout pendente do estado anterior.
         self._fav_debounce.stop()
+        self._coin_debounce.stop()
         self._fav_pending_value = task.favorito
         with QSignalBlocker(self._star_btn):
             self._star_btn.setChecked(task.favorito)
         self._refresh_star_icon()
         self._set_star_pending(False)
         self._set_star_in_flight(False)
-        self._perm_badge.setVisible(task.permanente)
+        coin_saved = bool(
+            self._callbacks.get("is_coin_favorite", lambda _tid: False)(task.id)
+        )
+        self._coin_pending_value = coin_saved
+        with QSignalBlocker(self._coin_btn):
+            self._coin_btn.setChecked(coin_saved)
+        self._refresh_coin_icon()
+        self._set_coin_pending(False)
+        self._set_coin_in_flight(False)
         self._refresh_text_content()
         self._seg_ctrl.update_task(task, self._all_tasks)
         self._apply_card_style()

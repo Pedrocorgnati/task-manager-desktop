@@ -1,7 +1,7 @@
 """DataTest overlay para exibir testids visualmente em runtime.
 
 Implementacao identica ao workflow-app:
-- 4 modos: off, all, body (tudo exceto QAbstractButton), buttons (so QAbstractButton)
+- 4 modos: off, main, body (tudo exceto QAbstractButton), buttons (so QAbstractButton)
 - Overlays parented ao centralWidget, posicionados com mapTo(central, ...)
 - Click no overlay copia `data-testid="..."` para clipboard
 - Feedback visual: vermelho normal -> verde 600ms apos copiar
@@ -9,8 +9,8 @@ Implementacao identica ao workflow-app:
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import re
+from collections.abc import Callable
 
 from PySide6.QtCore import QPoint, Qt, QTimer
 from PySide6.QtWidgets import (
@@ -22,15 +22,26 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-
-_VALID_MODES = ("off", "all", "body", "buttons")
+_VALID_MODES = ("off", "main", "body", "buttons")
+_MAIN_TESTIDS = frozenset(
+    {
+        "header",
+        "task-list-pane",
+        "task-list-active-section",
+        "task-list-waiting-section",
+        "subtask-clock-pane",
+        "right-pane-vertical",
+        "clock-pane",
+        "terminal-workspace",
+    }
+)
 # status-btn-{label}-{id} e status-control-{id}: todo o sufixo apos o prefixo
 # e dinamico por instancia, entao colapsa o conjunto inteiro para {ID}.
 _STATUS_ID_TOKEN = re.compile(r"(status-(?:btn|control)-)[a-z0-9-]+")
 # task-card-{id}[-sufixo]: o id e dinamico (pode ter mais de um segmento),
 # enquanto os sufixos abaixo sao estaveis (ver TaskCard). Ancora no sufixo
 # conhecido e mascara apenas o trecho do id.
-_TASK_CARD_SUFFIX = "content|type|id|deps|actions|edit|delete|title|status-column|menu"
+_TASK_CARD_SUFFIX = "content|id|deps|actions|edit|schedule|delete|title|status-column|menu"
 _TASK_CARD_TESTID = re.compile(rf"^(task-card-).+?(-(?:{_TASK_CARD_SUFFIX}))?$")
 # subtask ids tem o formato 'st-' + 10 chars hex (ver SubtaskPane._add_subtask).
 _SUBTASK_ID_TOKEN = re.compile(r"\bst-[0-9a-f]{10}\b")
@@ -42,7 +53,7 @@ def _mask_dynamic_testid(raw: str) -> str:
     Exemplos:
         'status-btn-ip-cew'         -> 'status-btn-{ID}'
         'status-control-vc9'        -> 'status-control-{ID}'
-        'task-card-cew-type'        -> 'task-card-{ID}-type'
+        'task-card-cew-title'       -> 'task-card-{ID}-title'
         'subtask-row-st-ab12cd34ef' -> 'subtask-row-{ID}'
     """
     raw = _STATUS_ID_TOKEN.sub(r"\1{ID}", raw)
@@ -50,6 +61,10 @@ def _mask_dynamic_testid(raw: str) -> str:
     if match:
         raw = f"{match.group(1)}{{ID}}{match.group(2) or ''}"
     return _SUBTASK_ID_TOKEN.sub("{ID}", raw)
+
+
+def _is_main_testid(raw: str) -> bool:
+    return raw in _MAIN_TESTIDS
 
 
 class DataTestOverlay:
@@ -87,10 +102,10 @@ class DataTestOverlay:
         return self._mode != "off"
 
     def set_mode(self, mode: str) -> None:
-        """Define o modo. Modos validos: off, all, body, buttons.
+        """Define o modo. Modos validos: off, main, body, buttons.
 
         - off: esconde todos os overlays
-        - all: mostra para todo widget com testid
+        - main: mostra apenas os testids estruturais principais
         - body: mostra para todos EXCETO QAbstractButton
         - buttons: mostra APENAS QAbstractButton
         """
@@ -103,8 +118,8 @@ class DataTestOverlay:
             self._show_for_mode(mode)
 
     def toggle(self) -> None:
-        """Alterna entre 'off' e 'all'."""
-        self.set_mode("off" if self._mode != "off" else "all")
+        """Alterna entre 'off' e 'main'."""
+        self.set_mode("off" if self._mode != "off" else "main")
 
     def set_terminal_write_enabled(self, enabled: bool) -> None:
         self._terminal_write_enabled = bool(enabled)
@@ -167,6 +182,9 @@ class DataTestOverlay:
                 continue
 
             testid_str = str(testid)
+            if mode == "main" and not _is_main_testid(testid_str):
+                continue
+
             display_testid = _mask_dynamic_testid(testid_str)
             overlay = QLabel(display_testid, overlay_parent)
             normal_style = self._STYLE_NORMAL_BUTTON if is_button else self._STYLE_NORMAL_BODY

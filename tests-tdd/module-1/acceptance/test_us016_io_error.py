@@ -10,7 +10,7 @@ import pytest
 from PySide6.QtWidgets import QDialog
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
 
@@ -60,8 +60,8 @@ def test_create_io_error_shows_dialog(_setup, monkeypatch, qtbot):
     """I/O error em CreateTaskController dispara ErrorDialog.show_io_error e mantem dialog aberto."""
     repo, conn, tl, db_path = _setup
 
-    from task_manager_desktop.controllers.create_task_controller import CreateTaskController
     from task_manager_desktop.controllers import create_task_controller as mod
+    from task_manager_desktop.controllers.create_task_controller import CreateTaskController
 
     ctrl = CreateTaskController(repo, tl, tl, parent=None)
 
@@ -74,7 +74,6 @@ def test_create_io_error_shows_dialog(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_create_dialog({
         "title": "Nova task",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)
@@ -94,11 +93,11 @@ def test_edit_io_error_shows_dialog(_setup, monkeypatch, qtbot):
     """I/O error em EditTaskController dispara ErrorDialog e Salvar reabilita."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Original", deps=[])
     repo.create(task)
 
-    from task_manager_desktop.controllers.edit_task_controller import EditTaskController
     from task_manager_desktop.controllers import edit_task_controller as mod
+    from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 
     ctrl = EditTaskController(repo, tl, tl, parent=None)
 
@@ -111,7 +110,6 @@ def test_edit_io_error_shows_dialog(_setup, monkeypatch, qtbot):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Novo titulo",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)

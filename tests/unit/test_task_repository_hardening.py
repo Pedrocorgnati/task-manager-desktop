@@ -42,6 +42,7 @@ _TASK_ROW_COLS = (
     "hidden_at",
     "favorito",
     "permanente",
+    "em_preparacao",
     "updated_at",
 )
 
@@ -89,6 +90,89 @@ def test_update_succeeds_on_existing_task(repo):
 def test_update_status_succeeds_on_existing_task(repo):
     repo.create(_task(id="a", title="T", status=Status.PENDING))
     repo.update_status("a", Status.IN_PROGRESS, None)
+    assert repo.get_by_id("a").status is Status.IN_PROGRESS
+
+
+def test_schedule_permanent_task_rejects_non_permanent(repo):
+    repo.create(_task(id="a", title="T", permanente=False))
+
+    with pytest.raises(ValueError, match="permanentes"):
+        repo.schedule_permanent_task("a", "2999-01-01T00:00:00+00:00")
+
+
+def test_schedule_permanent_task_rejects_invalid_due_at(repo):
+    repo.create(_task(id="a", title="T", permanente=True))
+
+    with pytest.raises(ValueError, match="due_at"):
+        repo.schedule_permanent_task("a", "amanha")
+
+
+def test_schedule_permanent_task_normalizes_due_at_to_utc(repo, conn):
+    repo.create(_task(id="a", title="T", permanente=True))
+
+    repo.schedule_permanent_task("a", "2026-05-01T03:00:00-03:00")
+
+    due_at = conn.execute(
+        "SELECT due_at FROM permanent_task_schedules WHERE task_id = 'a'"
+    ).fetchone()["due_at"]
+    assert due_at == "2026-05-01T06:00:00+00:00"
+
+
+def test_due_permanent_schedule_moves_task_to_in_progress(repo):
+    repo.create(
+        _task(
+            id="a",
+            title="T",
+            status=Status.DONE,
+            permanente=True,
+            completed_at="2026-01-01T00:00:00+00:00",
+        )
+    )
+    repo.schedule_permanent_task("a", "2026-05-01T00:00:00+00:00")
+
+    changed = repo.trigger_due_permanent_schedules("2026-05-02T00:00:00+00:00")
+
+    assert [task.id for task in changed] == ["a"]
+    persisted = repo.get_by_id("a")
+    assert persisted.status is Status.IN_PROGRESS
+    assert persisted.completed_at is None
+
+
+def test_due_permanent_schedule_restores_hidden_task(repo):
+    repo.create(_task(id="a", title="T", status=Status.DONE, permanente=True))
+    repo.mark_hidden("a")
+    repo.schedule_permanent_task("a", "2026-05-01T00:00:00+00:00")
+
+    changed = repo.trigger_due_permanent_schedules("2026-05-01T00:00:01+00:00")
+
+    assert [task.id for task in changed] == ["a"]
+    persisted = repo.get_by_id("a")
+    assert persisted.status is Status.IN_PROGRESS
+    assert persisted.hidden_at is None
+
+
+def test_due_permanent_schedule_drops_stale_non_permanent_schedule(repo, conn):
+    repo.create(_task(id="a", title="T", status=Status.DONE, permanente=True))
+    repo.schedule_permanent_task("a", "2026-05-01T00:00:00+00:00")
+    repo.update_permanente("a", False)
+
+    changed = repo.trigger_due_permanent_schedules("2026-05-01T00:00:01+00:00")
+
+    assert changed == []
+    assert repo.get_by_id("a").status is Status.DONE
+    count = conn.execute("SELECT COUNT(*) FROM permanent_task_schedules").fetchone()[0]
+    assert count == 0
+
+
+def test_manual_move_to_in_progress_does_not_cancel_due_schedule(repo):
+    repo.create(_task(id="a", title="T", status=Status.DONE, permanente=True))
+    repo.schedule_permanent_task("a", "2026-05-01T00:00:00+00:00")
+    repo.update_status("a", Status.IN_PROGRESS, None)
+
+    assert repo.trigger_due_permanent_schedules("2026-04-30T00:00:00+00:00") == []
+    changed = repo.trigger_due_permanent_schedules("2026-05-01T00:00:01+00:00")
+
+    assert [task.id for task in changed] == ["a"]
     assert repo.get_by_id("a").status is Status.IN_PROGRESS
 
 
@@ -158,6 +242,7 @@ def fake_row(conn):
         "hidden_at": None,
         "favorito": 0,
         "permanente": 0,
+        "em_preparacao": 0,
         "updated_at": None,
     }
 
@@ -182,10 +267,7 @@ def test_row_to_task_raises_on_corrupt_status(fake_row):
     assert "a" in str(exc.value)
 
 
-def test_row_to_task_raises_on_corrupt_type(fake_row):
-    with pytest.raises(DataCorruptionError) as exc:
-        _row_to_task(fake_row(type="wizard"))
-    assert "type" in str(exc.value)
+# removido: Task.type foi removido (tipo migrou para subtasks)
 
 
 def test_row_to_task_raises_on_corrupt_favorito(fake_row):
@@ -207,9 +289,8 @@ def test_row_to_task_raises_on_null_status(fake_row):
 
 def test_row_to_task_tolerates_whitespace_and_case(fake_row):
     """Variacao tolerada (espacos / caixa) e coagida ao valor canonico."""
-    task = _row_to_task(fake_row(status="  DONE  ", type="Agent"))
+    task = _row_to_task(fake_row(status="  DONE  "))
     assert task.status is Status.DONE
-    assert task.type.value == "agent"
 
 
 def test_row_to_task_null_favorito_defaults_false(fake_row):
@@ -221,7 +302,7 @@ def test_row_to_task_null_favorito_defaults_false(fake_row):
 
 def test_row_to_task_accepts_canonical_values(fake_row):
     """Sanidade: uma linha integra nao levanta e mapeia corretamente."""
-    task = _row_to_task(fake_row(status="done", type="dev", favorito=1, permanente=1))
+    task = _row_to_task(fake_row(status="done", favorito=1, permanente=1))
     assert task.status is Status.DONE
     assert task.favorito is True
     assert task.permanente is True

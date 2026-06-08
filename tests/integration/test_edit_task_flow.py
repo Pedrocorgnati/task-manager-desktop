@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QDialog
 
 from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Sector, Task, TaskType
+from task_manager_desktop.core.models import Sector, Task
 from task_manager_desktop.core.sector import compute_sector, count_open_deps
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
@@ -48,13 +48,12 @@ def _fake_edit_dialog(data: dict):
 def test_edit_title_persists_no_sector_change(setup, monkeypatch):
     """AC-T-001: Editar titulo persiste sem mudar setor."""
     ctrl, repo, conn, db_path = setup
-    task = Task(id="abc", title="Original", type=TaskType.AGENT, deps=[])
+    task = Task(id="abc", title="Original", deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Novo titulo",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -68,15 +67,14 @@ def test_edit_title_persists_no_sector_change(setup, monkeypatch):
 def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
     """AC-T-002: Adicionar dep aberta move task de Fila para Bloqueadas."""
     ctrl, repo, conn, _ = setup
-    dep_task = Task(id="dep1", title="Dep pendente", type=TaskType.AGENT, deps=[])
-    main_task = Task(id="main", title="Principal", type=TaskType.AGENT, deps=[])
+    dep_task = Task(id="dep1", title="Dep pendente", deps=[])
+    main_task = Task(id="main", title="Principal", deps=[])
     repo.create(dep_task)
     repo.create(main_task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Principal",
-        "type": TaskType.AGENT,
         "deps": ["dep1"],  # adicionando dep aberta
     }))
 
@@ -94,15 +92,14 @@ def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
 def test_remove_last_dep_moves_to_waiting(setup, monkeypatch):
     """AC-T-003: Remover unica dep move task de Bloqueadas para Fila."""
     ctrl, repo, conn, _ = setup
-    dep_task = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
-    main_task = Task(id="main", title="Principal", type=TaskType.AGENT, deps=["dep1"])
+    dep_task = Task(id="dep1", title="Dep", deps=[])
+    main_task = Task(id="main", title="Principal", deps=["dep1"])
     repo.create(dep_task)
     repo.create(main_task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Principal",
-        "type": TaskType.AGENT,
         "deps": [],  # removendo dep
     }))
 
@@ -122,9 +119,9 @@ def test_cycle_edit_drops_cycle_dep(setup, monkeypatch):
     """AC-T-004: Ciclo na edicao resulta em drop da dep ciclica."""
     ctrl, repo, conn, _ = setup
     # A -> B, B -> C; editar C para adicionar A (criaria ciclo C->A->B->C)
-    a = Task(id="a", title="A", type=TaskType.AGENT, deps=["b"])
-    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["c"])
-    c = Task(id="c", title="C", type=TaskType.AGENT, deps=[])
+    a = Task(id="a", title="A", deps=["b"])
+    b = Task(id="b", title="B", deps=["c"])
+    c = Task(id="c", title="C", deps=[])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -132,7 +129,6 @@ def test_cycle_edit_drops_cycle_dep(setup, monkeypatch):
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "C",
-        "type": TaskType.AGENT,
         "deps": ["a"],  # criaria ciclo: C -> A -> B -> C
     }))
 
@@ -143,30 +139,13 @@ def test_cycle_edit_drops_cycle_dep(setup, monkeypatch):
     assert "a" not in c_updated.deps
 
 
-def test_change_type_persists(setup, monkeypatch):
-    """AC-T-006: Trocar type persiste no banco."""
-    ctrl, repo, conn, _ = setup
-    task = Task(id="abc", title="X", type=TaskType.AGENT, deps=[])
-    repo.create(task)
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "X",
-        "type": TaskType.HUMAN,
-        "deps": [],
-    }))
-
-    ctrl.handle_edit(task)
-
-    tasks = repo.list_active()
-    updated = next(t for t in tasks if t.id == "abc")
-    assert updated.type == TaskType.HUMAN
+# removido: Task.type foi removido (tipo migrou para subtasks)
 
 
 def test_io_error_shows_error_dialog_no_corruption(setup, monkeypatch):
     """AC-T-015: Erro I/O nao corrompe estado em memoria."""
     ctrl, repo, conn, _ = setup
-    task = Task(id="abc", title="Original", type=TaskType.AGENT, deps=[])
+    task = Task(id="abc", title="Original", deps=[])
     repo.create(task)
 
     error_shown = []
@@ -180,7 +159,6 @@ def test_io_error_shows_error_dialog_no_corruption(setup, monkeypatch):
 
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Novo",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)
@@ -202,9 +180,9 @@ def test_recalc_only_direct_dependents_not_grandchildren(setup, monkeypatch):
     """RF-008: Recalculo cobre UM NIVEL — editar A nao recalcula setor de C que depende de B."""
     ctrl, repo, conn, _ = setup
     # Cadeia: A <- B <- C (C depende de B, B depende de A)
-    a = Task(id="a", title="A", type=TaskType.AGENT, deps=[])
-    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["a"])
-    c = Task(id="c", title="C", type=TaskType.AGENT, deps=["b"])
+    a = Task(id="a", title="A", deps=[])
+    b = Task(id="b", title="B", deps=["a"])
+    c = Task(id="c", title="C", deps=["b"])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -213,7 +191,6 @@ def test_recalc_only_direct_dependents_not_grandchildren(setup, monkeypatch):
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "A editada",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 

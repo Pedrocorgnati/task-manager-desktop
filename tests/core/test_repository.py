@@ -5,7 +5,7 @@ import sqlite3
 import pytest
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import ClockTimer, Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
 
@@ -34,7 +34,6 @@ def test_create_persists_all_fields(repo, conn):
     task = _task(
         id="abc",
         title="Tarefa X",
-        type=TaskType.HUMAN,
         deps=["d1", "d2"],
         notes="nota",
     )
@@ -43,7 +42,6 @@ def test_create_persists_all_fields(repo, conn):
     row = conn.execute("SELECT * FROM tasks WHERE id='abc'").fetchone()
     assert row is not None
     assert row["title"] == "Tarefa X"
-    assert row["type"] == "human"
     assert row["deps"] == "d1,d2"
     assert row["notes"] == "nota"
 
@@ -78,11 +76,7 @@ def test_update_status_enum_stored_as_value(repo, conn):
     assert row["status"] == "done"
 
 
-def test_update_type_enum_stored_as_value(repo, conn):
-    repo.create(_task(id="u", title="t"))
-    repo.update("u", type=TaskType.HUMAN)
-    row = conn.execute("SELECT type FROM tasks WHERE id='u'").fetchone()
-    assert row["type"] == "human"
+# removido: Task.type foi removido (tipo migrou para subtasks)
 
 
 def test_update_ignores_unknown_keys(repo, conn):
@@ -120,6 +114,52 @@ def test_delete_does_not_affect_other_rows(repo, conn):
     repo.delete("b")
     assert conn.execute("SELECT * FROM tasks WHERE id='a'").fetchone() is not None
     assert conn.execute("SELECT * FROM tasks WHERE id='b'").fetchone() is None
+
+
+def test_delete_clock_timer_removes_only_target_timer(repo):
+    repo.create_clock_timer(
+        ClockTimer(
+            id="tm-a",
+            title="A",
+            ends_at="2999-01-01T00:00:00+00:00",
+            remaining_seconds=3600,
+            duration_seconds=3600,
+        )
+    )
+    repo.create_clock_timer(
+        ClockTimer(
+            id="tm-b",
+            title="B",
+            ends_at="2999-01-01T00:00:00+00:00",
+            remaining_seconds=3600,
+            duration_seconds=3600,
+        )
+    )
+
+    repo.delete_clock_timer("tm-a")
+
+    assert [timer.id for timer in repo.list_clock_timers()] == ["tm-b"]
+
+
+def test_clock_timer_color_is_persisted(repo):
+    repo.create_clock_timer(
+        ClockTimer(
+            id="tm-color",
+            title="Timer colorido",
+            ends_at="2999-01-01T00:00:00+00:00",
+            remaining_seconds=3600,
+            duration_seconds=3600,
+            color="#3B82F6",
+        )
+    )
+
+    timer = repo.list_clock_timers()[0]
+    assert timer.color == "#3B82F6"
+
+    timer.color = "#EF4444"
+    repo.update_clock_timer(timer)
+
+    assert repo.list_clock_timers()[0].color == "#EF4444"
 
 
 # ── list_active ───────────────────────────────────────────────────────────────

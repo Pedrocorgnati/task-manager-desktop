@@ -4,7 +4,7 @@ import pytest
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.dialogs.trash_dialog import TrashDialog
 
@@ -26,7 +26,6 @@ def _seed_done(
             id=tid,
             title=title,
             status=Status.DONE,
-            type=TaskType.HUMAN,
             deps=[],
             notes="",
             order_index=0,

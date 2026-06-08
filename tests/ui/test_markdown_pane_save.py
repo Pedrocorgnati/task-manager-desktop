@@ -3,14 +3,11 @@ from __future__ import annotations
 import sqlite3
 
 import pytest
-from PySide6.QtCore import Qt
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.exceptions import TaskNotFoundError
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.markdown_pane import MarkdownPane
-
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -20,7 +17,6 @@ def _make_task(task_id: str = "t1", notes: str = "# Original") -> Task:
         id=task_id,
         title=f"Task {task_id}",
         status=Status.PENDING,
-        type=TaskType.AGENT,
         deps=[],
         notes=notes,
         order_index=0,

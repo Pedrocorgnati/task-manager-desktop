@@ -403,3 +403,51 @@ def test_handle_is_alias_for_change_status(mock_error_handler):
 
     repo.update_status.assert_called_once()
     assert task.status == Status.DONE
+
+
+# ---------------------------------------------------------------------------
+# Setor manual "Em preparação": qualquer botao de status devolve a task ao
+# fluxo normal zerando a flag em_preparacao.
+# ---------------------------------------------------------------------------
+
+
+def test_status_change_clears_em_preparacao(mock_error_handler):
+    """Mudar de status (pending->in_progress) zera em_preparacao no repo e em memoria."""
+    repo = _make_repo()
+    task = _make_task(status=Status.PENDING)
+    task.em_preparacao = True
+
+    ctrl = _make_ctrl(repo, mock_error_handler)
+    ctrl.change_status(task, "in_progress")
+
+    repo.update_em_preparacao.assert_called_once_with("t1", False)
+    repo.update_status.assert_called_once()
+    assert task.em_preparacao is False
+    assert task.status == Status.IN_PROGRESS
+
+
+def test_same_status_click_still_clears_em_preparacao_and_refreshes(mock_error_handler):
+    """Reclicar o status atual nao muda status, mas ainda tira a task de "Em preparação"."""
+    repo = _make_repo()
+    task = _make_task(status=Status.PENDING)
+    task.em_preparacao = True
+    refreshed: list[str] = []
+
+    ctrl = _make_ctrl(repo, mock_error_handler, refresh_cb=lambda t: refreshed.append(t.id))
+    ctrl.change_status(task, "pending")
+
+    repo.update_em_preparacao.assert_called_once_with("t1", False)
+    repo.update_status.assert_not_called()  # status inalterado
+    assert task.em_preparacao is False
+    assert refreshed == ["t1"]  # card re-renderizado para sair do setor verde
+
+
+def test_status_change_without_preparacao_does_not_touch_flag(mock_error_handler):
+    """Task fora de "Em preparação" nao dispara update_em_preparacao."""
+    repo = _make_repo()
+    task = _make_task(status=Status.PENDING)  # em_preparacao default False
+
+    ctrl = _make_ctrl(repo, mock_error_handler)
+    ctrl.change_status(task, "done")
+
+    repo.update_em_preparacao.assert_not_called()

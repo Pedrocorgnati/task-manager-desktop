@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import subprocess
 
-import pytest
 from PySide6.QtCore import QUrl
 
 from task_manager_desktop.ui._external_link import _open_external_link

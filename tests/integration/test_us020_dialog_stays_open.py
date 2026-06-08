@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox
 from task_manager_desktop.controllers.create_task_controller import CreateTaskController
 from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Task, TaskType
+from task_manager_desktop.core.models import Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.dialogs.edit_task_dialog import EditTaskDialog
 from task_manager_desktop.ui.dialogs.new_task_dialog import NewTaskDialog
@@ -71,7 +71,7 @@ def test_edit_dialog_stays_open_on_io_error(_setup, monkeypatch, qtbot):
     """US-020 c3: EditTaskDialog permanece aberto + Salvar reabilitado quando repo.update levanta sqlite3.Error."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Original", deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod

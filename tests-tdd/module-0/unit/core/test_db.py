@@ -24,9 +24,12 @@ class TestSchemaV1Tabela:
         run_migrations(mem)
         cols = {row[1] for row in mem.execute("PRAGMA table_info(tasks)")}
         expected = {
-            "id", "title", "status", "type", "deps", "notes",
+            "id", "title", "status", "deps", "notes",
             "order_index", "created_at", "completed_at", "hidden_at",
             "favorito", "permanente", "updated_at",
+            # v8: flag manual do setor "Em preparação"
+            "em_preparacao",
+            # v10 dropou a coluna `type` (o tipo migrou para as subtasks).
         }
         assert cols == expected
 
@@ -63,7 +66,8 @@ class TestRunMigracoesIdempotente:
         run_migrations(mem)
         run_migrations(mem)
         count = mem.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-        assert count == 7
+        # v10: drop da coluna `type` de tasks.
+        assert count == 10
 
 
 class TestCheckConstraintStatus:
@@ -79,8 +83,10 @@ class TestCheckConstraintType:
     """TID-0-1-006 | covers: TASK-1/ST002 BDD#4 | suite: unit | classification: ERROR"""
 
     def test_check_constraint_type_rejeita_valor_invalido(self, mem):
+        # A coluna tasks.type (e seu CHECK) foi removida na migration v10;
+        # inserir nela agora falha por coluna inexistente.
         run_migrations(mem)
-        with pytest.raises(sqlite3.IntegrityError):
+        with pytest.raises(sqlite3.OperationalError):
             mem.execute(
                 "INSERT INTO tasks (id, title, status, type) VALUES ('x', 'T', 'pending', 'invalido')"
             )
@@ -89,9 +95,9 @@ class TestCheckConstraintType:
 class TestInsertDefaults:
     """TID-0-1-007 | covers: TASK-1/ST002 BDD#5 | suite: unit"""
 
-    def test_insert_sem_type_aplica_default_agent(self, mem):
+    def test_tasks_nao_tem_mais_coluna_type(self, mem):
+        # O tipo deixou de ser atributo da task (migration v10): a coluna `type`
+        # nao existe mais em tasks.
         run_migrations(mem)
-        mem.execute("INSERT INTO tasks (id, title, status) VALUES ('x', 'T', 'pending')")
-        mem.commit()
-        row = mem.execute("SELECT type FROM tasks WHERE id='x'").fetchone()
-        assert row["type"] == "agent"
+        cols = {row[1] for row in mem.execute("PRAGMA table_info(tasks)")}
+        assert "type" not in cols

@@ -22,11 +22,15 @@ class TestComputeSectorSignature:
 
         sig = inspect.signature(compute_sector)
         params = list(sig.parameters.keys())
-        assert params == ["status", "has_open_deps", "permanente"], (
-            f"Params inesperados: {params}"
-        )
+        assert params == [
+            "status",
+            "has_open_deps",
+            "permanente",
+            "em_preparacao",
+        ], (f"Params inesperados: {params}")
 
         hints = get_type_hints(compute_sector)
         assert hints.get("status") is Status
         assert hints.get("has_open_deps") is bool
         assert hints.get("permanente") is bool
+        assert hints.get("em_preparacao") is bool

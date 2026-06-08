@@ -28,13 +28,13 @@ class TestMainWindowShellSplitter:
         w.show()
         sizes = w._splitter.sizes()
         total = sum(sizes)
-        # Verificar proporcao [490, 210, 700] -> [35%, 15%, 50%] do total
+        # Verificar proporcao [340, 260, 800] do total padrao
         assert len(sizes) == 3
-        assert abs(sizes[0] / total - 0.35) < 0.05, (
-            f"Proporcao esquerda esperada ~0.35, got {sizes[0]/total:.2f} (sizes={sizes})"
+        assert abs(sizes[0] / total - 0.243) < 0.05, (
+            f"Proporcao esquerda esperada ~0.243, got {sizes[0]/total:.2f} (sizes={sizes})"
         )
-        assert abs(sizes[1] / total - 0.15) < 0.05, (
-            f"Proporcao intermediaria esperada ~0.15, got {sizes[1]/total:.2f} (sizes={sizes})"
+        assert abs(sizes[1] / total - 0.186) < 0.05, (
+            f"Proporcao intermediaria esperada ~0.186, got {sizes[1]/total:.2f} (sizes={sizes})"
         )
         assert w._splitter.handleWidth() == 4
 

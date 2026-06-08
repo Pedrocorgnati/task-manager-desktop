@@ -11,7 +11,7 @@ from PySide6.QtWidgets import QDialog
 
 from task_manager_desktop.controllers.edit_task_controller import EditTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Sector, Status, Task, TaskType
+from task_manager_desktop.core.models import Sector, Task
 from task_manager_desktop.core.sector import compute_sector, count_open_deps
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
@@ -52,13 +52,12 @@ def _fake_edit_dialog(data: dict):
 def test_edit_title_persists_no_sector_change(setup, monkeypatch):
     """Edicao apenas do titulo persiste e card atualiza sem mudar setor."""
     ctrl, repo, conn, db_path = setup
-    task = Task(id="t1", title="Original", type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="Original", deps=[])
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Editado",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -80,15 +79,14 @@ def test_edit_title_persists_no_sector_change(setup, monkeypatch):
 def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
     """Adicao de dep aberta move task de Fila para Bloqueadas com recalc."""
     ctrl, repo, conn, _ = setup
-    dep = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
-    main = Task(id="main", title="Main", type=TaskType.AGENT, deps=[])
+    dep = Task(id="dep1", title="Dep", deps=[])
+    main = Task(id="main", title="Main", deps=[])
     repo.create(dep)
     repo.create(main)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Main",
-        "type": TaskType.AGENT,
         "deps": ["dep1"],
     }))
 
@@ -108,15 +106,14 @@ def test_add_open_dep_moves_to_blocked(setup, monkeypatch):
 def test_remove_last_dep_moves_to_queue(setup, monkeypatch):
     """Remocao da unica dep aberta move task de Bloqueadas para Fila."""
     ctrl, repo, conn, _ = setup
-    dep = Task(id="dep1", title="Dep", type=TaskType.AGENT, deps=[])
-    main = Task(id="main", title="Main", type=TaskType.AGENT, deps=["dep1"])
+    dep = Task(id="dep1", title="Dep", deps=[])
+    main = Task(id="main", title="Main", deps=["dep1"])
     repo.create(dep)
     repo.create(main)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "Main",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
 
@@ -136,9 +133,9 @@ def test_remove_last_dep_moves_to_queue(setup, monkeypatch):
 def test_cycle_on_edit_resolved_with_toast(setup, monkeypatch):
     """Edicao introduz ciclo: resolve_cycles aplica substituicao + toast >= 3s."""
     ctrl, repo, conn, _ = setup
-    a = Task(id="a", title="A", type=TaskType.AGENT, deps=["b"])
-    b = Task(id="b", title="B", type=TaskType.AGENT, deps=["c"])
-    c = Task(id="c", title="C", type=TaskType.AGENT, deps=[])
+    a = Task(id="a", title="A", deps=["b"])
+    b = Task(id="b", title="B", deps=["c"])
+    c = Task(id="c", title="C", deps=[])
     repo.create(a)
     repo.create(b)
     repo.create(c)
@@ -157,7 +154,6 @@ def test_cycle_on_edit_resolved_with_toast(setup, monkeypatch):
     monkeypatch.setattr(mod, "ToastWidget", FakeToast)
     monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
         "title": "C",
-        "type": TaskType.AGENT,
         "deps": ["a"],  # C -> A -> B -> C = ciclo
     }))
 
@@ -171,26 +167,4 @@ def test_cycle_on_edit_resolved_with_toast(setup, monkeypatch):
         _, duration = toast_args[0]
         assert duration >= 3000
 
-
-# TID-1-2-005 | covers: US-002#5 | bdd_type: SUCCESS
-def test_change_type_persists_and_updates_card_icon(setup, monkeypatch):
-    """Troca de type via radio persiste e atualiza chip AGENT/HUMAN do card."""
-    ctrl, repo, conn, _ = setup
-    task = Task(id="t1", title="X", type=TaskType.AGENT, deps=[])
-    repo.create(task)
-
-    from task_manager_desktop.controllers import edit_task_controller as mod
-    monkeypatch.setattr(mod, "EditTaskDialog", _fake_edit_dialog({
-        "title": "X",
-        "type": TaskType.HUMAN,
-        "deps": [],
-    }))
-
-    ctrl.handle_edit(task)
-
-    tasks = repo.list_active()
-    updated = next(t for t in tasks if t.id == "t1")
-    assert updated.type == TaskType.HUMAN
-
-    row = conn.execute("SELECT type FROM tasks WHERE id='t1'").fetchone()
-    assert row["type"] == "human"
+# removido: Task.type foi removido (tipo migrou para subtasks)

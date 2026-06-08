@@ -15,7 +15,7 @@ from PySide6.QtCore import QMimeData, QPointF, Qt
 from PySide6.QtGui import QDropEvent
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Sector, Status, Task, TaskType
+from task_manager_desktop.core.models import Sector, Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import (
     _ROLE_TASK_ID,
@@ -38,7 +38,6 @@ def _task(tid: str, *, favorito: bool = False, order_index: int = 1) -> Task:
         id=tid,
         title=f"Task {tid}",
         status=Status.PENDING,
-        type=TaskType.HUMAN,
         deps=[],
         order_index=order_index,
         created_at="2026-05-21T10:00:00",
@@ -59,6 +58,7 @@ def test_render_order_tem_permanent_por_ultimo():
     assert RENDER_ORDER[-1] is Sector.PERMANENT
     assert RENDER_ORDER == [
         Sector.ACTIVE,
+        Sector.EM_PREPARACAO,
         Sector.WAITING,
         Sector.BLOCKED,
         Sector.DONE,

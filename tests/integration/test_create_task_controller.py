@@ -9,7 +9,6 @@ from PySide6.QtWidgets import QDialog
 
 from task_manager_desktop.controllers.create_task_controller import CreateTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import TaskType
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.task_list import TaskList
 
@@ -55,7 +54,6 @@ def test_create_task_controller_happy_path_end_to_end(setup, monkeypatch):
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_dialog_cls({
         "title": "End-to-end task",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     ctrl.handle()
@@ -63,7 +61,6 @@ def test_create_task_controller_happy_path_end_to_end(setup, monkeypatch):
     tasks = repo.list_active()
     assert len(tasks) == 1
     assert tasks[0].title == "End-to-end task"
-    assert tasks[0].type == TaskType.AGENT
     assert tasks[0].deps == []
 
 
@@ -84,7 +81,6 @@ def test_create_task_controller_sad_path_io_error_keeps_dialog_open(setup, monke
 
     monkeypatch.setattr(mod, "NewTaskDialog", _fake_dialog_cls({
         "title": "Will fail",
-        "type": TaskType.AGENT,
         "deps": [],
     }))
     monkeypatch.setattr(mod, "ErrorDialog", FakeErrorDialog)

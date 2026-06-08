@@ -13,7 +13,7 @@ import sqlite3
 import pytest
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 
 # ── fixtures ──────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ def _task(id: str, title: str = "T",
           status: Status = Status.PENDING) -> Task:
     return Task(
         id=id, title=title, status=status,
-        type=TaskType.AGENT, deps=[],
+        deps=[],
     )
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.widgets.status_segmented_control import StatusSegmentedControl
 
 
@@ -9,7 +9,6 @@ def _make_task(status: Status = Status.PENDING, deps=None) -> Task:
         id="t1",
         title="Test",
         status=status,
-        type=TaskType.AGENT,
         deps=deps or [],
     )
 

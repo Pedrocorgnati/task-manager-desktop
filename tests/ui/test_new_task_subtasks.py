@@ -13,7 +13,7 @@ import pytest
 
 from task_manager_desktop.controllers.create_task_controller import CreateTaskController
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.dialogs.edit_task_dialog import EditTaskDialog
 from task_manager_desktop.ui.dialogs.new_task_dialog import NewTaskDialog
@@ -29,7 +29,7 @@ def test_create_dialog_has_subtask_section(qtbot):
 
 
 def test_edit_dialog_has_no_subtask_section(qtbot):
-    task = Task(id="t1", title="X", status=Status.PENDING, type=TaskType.AGENT, deps=[])
+    task = Task(id="t1", title="X", status=Status.PENDING, deps=[])
     dlg = EditTaskDialog(task=task)
     qtbot.addWidget(dlg)
     assert dlg.form._creating is False
@@ -98,7 +98,6 @@ def test_controller_persists_task_with_subtasks(qtbot, tmp_path):
 
     data = {
         "title": "Task com subtasks",
-        "type": TaskType.AGENT,
         "deps": [],
         "subtasks": ["Primeira", "Segunda", "Terceira"],
     }
@@ -122,7 +121,7 @@ def test_controller_handles_absent_subtasks_key(qtbot, tmp_path, missing_key):
     qtbot.addWidget(task_list)
     ctrl = CreateTaskController(repo, task_list, task_list, parent=None)
 
-    data = {"title": "Sem subs", "type": TaskType.DEV, "deps": []}
+    data = {"title": "Sem subs", "deps": []}
     if not missing_key:
         data["subtasks"] = []
     assert ctrl._persist(data, None) is True
@@ -130,3 +129,57 @@ def test_controller_handles_absent_subtasks_key(qtbot, tmp_path, missing_key):
     tasks = repo.list_active()
     assert len(tasks) == 1
     assert repo.list_subtasks(tasks[0].id) == []
+
+
+# ── Status inicial "Em preparação" ──────────────────────────────────────────
+
+
+def test_form_has_em_preparacao_status_pill(qtbot):
+    dlg = NewTaskDialog()
+    qtbot.addWidget(dlg)
+    pill = dlg.form._status_prepare_pill
+    assert pill.property("testid") == "task-form-status-preparacao"
+    # Status inicial default e Pendente; preparacao nao vem marcada.
+    assert dlg.get_data()["em_preparacao"] is False
+
+
+def test_get_data_em_preparacao_when_pill_checked(qtbot):
+    dlg = NewTaskDialog()
+    qtbot.addWidget(dlg)
+    dlg.form.title_input.setText("Em preparo")
+    dlg.form._status_prepare_pill.setChecked(True)
+
+    data = dlg.get_data()
+    # Setor manual e ortogonal ao Status: a flag liga, o Status segue PENDING.
+    assert data["em_preparacao"] is True
+    assert data["status"] is Status.PENDING
+
+
+def test_controller_persists_em_preparacao_flag(qtbot, tmp_path):
+    db_path = tmp_path / "prep.db"
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    run_migrations(conn)
+    repo = TaskRepository(conn, db_path=str(db_path))
+    task_list = TaskList()
+    qtbot.addWidget(task_list)
+    ctrl = CreateTaskController(repo, task_list, task_list, parent=None)
+
+    data = {
+        "title": "Task em preparo",
+        "deps": [],
+        "status": Status.PENDING,
+        "em_preparacao": True,
+        "subtasks": [],
+    }
+    assert ctrl._persist(data, None) is True
+
+    tasks = repo.list_active()
+    assert len(tasks) == 1
+    assert tasks[0].em_preparacao is True
+    # O setor recomputado pelo controller reflete a flag manual.
+    from task_manager_desktop.core.models import Sector
+
+    assert ctrl.last_sector is not None
+    sector, _color = ctrl.last_sector
+    assert sector is Sector.EM_PREPARACAO

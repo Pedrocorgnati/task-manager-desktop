@@ -10,7 +10,7 @@ import inspect
 def test_task_card_constructor_accepts_task_callbacks_all_tasks(qtbot):
     """Contrato TaskCard(task, callbacks: {on_edit, on_delete, on_status_change}, all_tasks)
     consumido por module-2/module-5. Verifica assinatura __init__ + chaves obrigatorias do dict callbacks."""
-    from task_manager_desktop.core.models import Status, Task, TaskType
+    from task_manager_desktop.core.models import Status, Task
     from task_manager_desktop.ui.task_card import TaskCard
 
     # Verify constructor signature has task, callbacks, all_tasks
@@ -21,7 +21,7 @@ def test_task_card_constructor_accepts_task_callbacks_all_tasks(qtbot):
     assert "all_tasks" in params
 
     # Verify a real instance can be created with the required callback dict
-    task = Task(id="x", title="T", status=Status.PENDING, type=TaskType.AGENT, deps=[])
+    task = Task(id="x", title="T", status=Status.PENDING, deps=[])
     received = {}
     callbacks = {
         "on_edit": lambda t: received.update({"edit": t.id}),

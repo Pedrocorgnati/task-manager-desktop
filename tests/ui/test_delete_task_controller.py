@@ -6,12 +6,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from task_manager_desktop.controllers.delete_task_controller import DeleteTaskController
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 
 
 @pytest.fixture
 def task():
-    return Task(id="abc", title="Tarefa ABC", status=Status.PENDING, type=TaskType.AGENT)
+    return Task(id="abc", title="Tarefa ABC", status=Status.PENDING)
 
 
 @pytest.fixture

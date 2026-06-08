@@ -24,7 +24,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QLabel, QPushButton
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Sector, Status, Task, TaskType
+from task_manager_desktop.core.models import Sector, Status, Task
 from task_manager_desktop.core.sector import compute_sector
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.dialogs.trash_dialog import TrashDialog
@@ -58,7 +58,6 @@ def _create_done_task(
         id=tid,
         title=title,
         status=status,
-        type=TaskType.HUMAN,
         deps=deps or [],
         notes="",
         order_index=0,

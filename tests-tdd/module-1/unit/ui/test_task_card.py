@@ -6,11 +6,10 @@
 # TIDs: TID-1-2-012, TID-1-2-013, TID-1-2-014, TID-1-2-015, TID-1-2-016
 from __future__ import annotations
 
-import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMenu
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.task_card import TaskCard
 
 _CBS = {
@@ -21,14 +20,14 @@ _CBS = {
 
 
 def _task(**kw) -> Task:
-    defaults = dict(id="abc", title="Test", status=Status.PENDING, type=TaskType.AGENT, deps=[])
+    defaults = dict(id="abc", title="Test", status=Status.PENDING, deps=[])
     defaults.update(kw)
     return Task(**defaults)
 
 
 # TID-1-2-012 | covers: TASK-2/ST002 render
 def test_task_card_renders_three_rows_meta_title_status(qtbot):
-    """TaskCard renderiza 3 linhas: meta-row (id + segmented + [...]), title-row, status-row (type icon + deps)."""
+    """TaskCard renderiza 3 linhas: meta-row (id + segmented + [...]), title-row, status-row (deps, sem chip de tipo)."""
     task = _task()
     card = TaskCard(task, _CBS, [task])
     qtbot.addWidget(card)
@@ -41,9 +40,9 @@ def test_task_card_renders_three_rows_meta_title_status(qtbot):
     # title-row
     assert card._title_label.text() == "Test"
 
-    # status-row
-    assert card._type_icon is not None
-    assert card._type_icon.toolTip() == "agent"
+    # status-row: o card nao tem mais chip de tipo (migrou para as subtasks).
+    assert not hasattr(card, "_type_icon")
+    assert card._deps_label is not None
     assert card._deps_label is not None
 
 

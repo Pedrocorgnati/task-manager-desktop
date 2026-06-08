@@ -15,7 +15,6 @@ Architecture:
 
 from __future__ import annotations
 
-import math
 import unicodedata
 from typing import Any
 
@@ -35,10 +34,8 @@ from PySide6.QtWidgets import (
     QMenu,
     QScrollBar,
     QSizePolicy,
-    QVBoxLayout,
     QWidget,
 )
-
 
 # ── ANSI color palette (VS Code style) ─────────────────────────────────── #
 
@@ -673,7 +670,6 @@ class TerminalCanvas(QWidget):
     })
 
     def keyPressEvent(self, event) -> None:  # noqa: N802
-        from PySide6.QtGui import QKeyEvent  # noqa: PLC0415
         key = Qt.Key(event.key())
         modifiers = event.modifiers()
         ctrl = Qt.KeyboardModifier.ControlModifier

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.task_card import TaskCard
 
 
@@ -22,7 +22,6 @@ def _make_task(**kwargs) -> Task:
         id="abc",
         title="Test",
         status=Status.PENDING,
-        type=TaskType.AGENT,
         deps=[],
     )
     defaults.update(kwargs)
@@ -45,6 +44,27 @@ def test_set_selected_toggles_style(qtbot, calls_and_cbs):
     card.set_selected(False)
     assert card._selected is False
     assert "border-left: 3px solid #FFFFFF" not in card.styleSheet()
+
+
+def test_set_selected_applies_white_glow(qtbot, calls_and_cbs):
+    from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+    _, cbs = calls_and_cbs
+    task = _make_task()
+    card = TaskCard(task, cbs, [task])
+    qtbot.addWidget(card)
+    assert card.graphicsEffect() is None
+
+    card.set_selected(True)
+    effect = card.graphicsEffect()
+    assert isinstance(effect, QGraphicsDropShadowEffect)
+    color = effect.color()
+    assert (color.red(), color.green(), color.blue()) == (255, 255, 255)
+    assert effect.blurRadius() > 0
+
+    # Deselecionar remove o efeito (nao acumula glow entre selecoes).
+    card.set_selected(False)
+    assert card.graphicsEffect() is None
 
 
 def test_on_status_change_invokes_callback(qtbot, calls_and_cbs):
@@ -146,19 +166,19 @@ def test_show_context_menu_dismissed_returns_none(qtbot, calls_and_cbs, fake_men
     assert calls["delete"] == []
 
 
-def test_update_task_changes_id_title_type_icon(qtbot, calls_and_cbs):
+def test_update_task_changes_id_and_title(qtbot, calls_and_cbs):
     _, cbs = calls_and_cbs
-    task = _make_task(id="abc", title="Old", type=TaskType.AGENT, deps=[])
+    task = _make_task(id="abc", title="Old", deps=[])
     card = TaskCard(task, cbs, [task])
     qtbot.addWidget(card)
 
-    new = _make_task(id="xyz", title="New", type=TaskType.HUMAN, deps=[])
+    new = _make_task(id="xyz", title="New", deps=[])
     card.update_task(new, [new])
 
     assert card._id_label.text() == "#xyz"
     assert card._title_label.text() == "New"
-    assert not card._type_icon.pixmap().isNull()
-    assert card._type_icon.toolTip() == "human"
+    # O card nao tem mais chip de tipo (migrou para as subtasks).
+    assert not hasattr(card, "_type_icon")
     assert card._deps_label.isHidden()
 
 

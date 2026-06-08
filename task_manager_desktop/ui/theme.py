@@ -6,12 +6,13 @@ WINDOW_DEF_W: int = 1400
 WINDOW_DEF_H: int = 900
 WINDOW_MIN_W: int = 900
 WINDOW_MIN_H: int = 600
+HEADER_BAR_H: int = 58
 
-SPLITTER_SIZES: list[int] = [490, 210, 700]
-SPLITTER_COLLAPSED_SIZES: list[int] = [490, 70, 840]
-SPLITTER_RATIOS: list[float] = [0.35, 0.15, 0.50]
-SPLITTER_COLLAPSED_RATIOS: list[float] = [0.35, 0.05, 0.60]
-SPLITTER_RATIO: float = 0.35
+SPLITTER_SIZES: list[int] = [340, 260, 800]
+SPLITTER_COLLAPSED_SIZES: list[int] = [340, 70, 990]
+SPLITTER_RATIOS: list[float] = [0.243, 0.186, 0.571]
+SPLITTER_COLLAPSED_RATIOS: list[float] = [0.243, 0.05, 0.707]
+SPLITTER_RATIO: float = 0.243
 
 FONT_FAMILY_BODY = "Ubuntu Sans, Noto Sans, DejaVu Sans, sans-serif"
 FONT_FAMILY_MONO = "JetBrains Mono, Ubuntu Mono, Fira Code, monospace"
@@ -38,5 +39,7 @@ PALETTE: dict[str, str] = {
     "ACCENT_GOLD": "#D4AF37",
     "COLOR_PRIMARY": "#FBBF24",
 }
+
+ACCENT_GOLD: str = PALETTE["ACCENT_GOLD"]
 
 THEME_QSS_PATH: Path = Path(__file__).parent / "theme.qss"

@@ -102,7 +102,7 @@ class TestInitHeaderGPLv3:
 
     def test_init_contem_header_gplv3_e_copyright_pedro(self):
         text = INIT_FILE.read_text(encoding="utf-8")
-        assert "Copyright (C) 2026 Pedro Corgnati" in text or "Pedro Corgnati" in text
+        assert "Copyright (C) 2026 Pedro Murta" in text or "Pedro Murta" in text
         assert "GNU General Public License" in text or "GPL" in text
 
 

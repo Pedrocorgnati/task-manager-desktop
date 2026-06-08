@@ -71,7 +71,15 @@ class ChangeStatusController:
             )
             return
 
+        # Requisito UI: clicar em QUALQUER botao de status devolve a task do
+        # setor manual "Em preparação" ao fluxo normal. Feito antes do
+        # short-circuit de status inalterado para que reclicar o status atual
+        # ainda tire o card de "Em preparação".
+        cleared_preparacao = self._clear_em_preparacao(task)
+
         if task.status == new_status:
+            if cleared_preparacao:
+                self._refresh_card(task)
             return
 
         # completed_at logic (AC-T-002)
@@ -159,6 +167,29 @@ class ChangeStatusController:
 
         for dep_id, new_sector, _new_color in propagation:
             self._task_list.move_card_to_sector(dep_id, new_sector)
+
+    def _clear_em_preparacao(self, task: Task) -> bool:
+        """Zera a flag manual em_preparacao da task (persistencia + memoria).
+
+        Retorna True se a flag estava ligada e foi efetivamente zerada. Falhas
+        de I/O sao logadas mas nao abortam a transicao de status — sair de "Em
+        preparação" e best-effort e nunca deve impedir o usuario de mudar o
+        status do card.
+        """
+        if not getattr(task, "em_preparacao", False):
+            return False
+        try:
+            self._repo.update_em_preparacao(task.id, False)
+        except (sqlite3.DatabaseError, TaskNotFoundError):
+            _logger.exception(
+                "falha ao zerar em_preparacao da task %s; seguindo com a "
+                "transicao de status",
+                task.id,
+                extra={"task_id": task.id},
+            )
+            return False
+        task.em_preparacao = False
+        return True
 
     def handle(
         self,

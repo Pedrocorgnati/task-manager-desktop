@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFont, QPainter, QTextCharFormat, QSyntaxHighlighter
+from PySide6.QtGui import QColor, QFont, QPainter, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import QPlainTextEdit, QWidget
 
 _HEADING_RE = re.compile(r"^(#{1,6})\s+")
@@ -83,6 +83,13 @@ class MarkdownEditor(QPlainTextEdit):
             self._line_number_fg = QColor("#686C78")
             self._fold_fg = QColor("#FBBF24")
         self._highlighter.set_light_mode(light)
+        self._line_number_area.update()
+
+    def set_reader_font_size(self, size: int) -> None:
+        font = self.font()
+        font.setPointSize(size)
+        self.setFont(font)
+        self._update_line_number_area_width()
         self._line_number_area.update()
 
     def line_number_area_width(self) -> int:

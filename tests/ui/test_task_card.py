@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from PySide6.QtCore import Qt
 
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.ui.task_card import TaskCard
 
 
@@ -23,7 +23,6 @@ def _make_task(**kwargs) -> Task:
         id="abc",
         title="Test",
         status=Status.PENDING,
-        type=TaskType.AGENT,
         deps=[],
     )
     defaults.update(kwargs)
@@ -121,6 +120,33 @@ def test_hover_actions_start_hidden_and_call_callbacks(qtbot, callbacks):
     assert calls["delete"] == ["abc"]
 
 
+def test_permanent_card_renders_schedule_button_between_edit_and_delete(qtbot):
+    calls: dict[str, list[str]] = {"schedule": []}
+    cbs = {"on_schedule_permanent": lambda t: calls["schedule"].append(t.id)}
+    task = _make_task(permanente=True)
+    card = TaskCard(task, cbs, [task])
+    qtbot.addWidget(card)
+    card.show()
+    card._set_hover_actions_visible(True)
+
+    assert card._schedule_btn.isVisible() is True
+    assert card._actions_row.layout().indexOf(card._edit_btn) < card._actions_row.layout().indexOf(card._schedule_btn)
+    assert card._actions_row.layout().indexOf(card._schedule_btn) < card._actions_row.layout().indexOf(card._delete_btn)
+    assert card._schedule_btn.property("testid") == "task-card-abc-schedule"
+
+    qtbot.mouseClick(card._schedule_btn, Qt.MouseButton.LeftButton)
+    assert calls["schedule"] == ["abc"]
+
+
+def test_non_permanent_card_hides_schedule_button(qtbot, callbacks):
+    _, cbs = callbacks
+    task = _make_task(permanente=False)
+    card = TaskCard(task, cbs, [task])
+    qtbot.addWidget(card)
+
+    assert card._schedule_btn.isHidden()
+
+
 def test_segmented_reflects_current_status(qtbot, callbacks):
     _, cbs = callbacks
     task = _make_task(status=Status.IN_PROGRESS)
@@ -131,22 +157,24 @@ def test_segmented_reflects_current_status(qtbot, callbacks):
     assert card._seg_ctrl.btn_d.isChecked() is False
 
 
-def test_type_icon_agent_tooltip(qtbot, callbacks):
+def test_card_has_no_type_chip(qtbot, callbacks):
+    # O tipo (agent/dev/human) migrou para as subtasks: o card principal nao
+    # deve mais expor o chip de tipo nem o widget interno.
+    from PySide6.QtWidgets import QLabel
+
     _, cbs = callbacks
-    task = _make_task(type=TaskType.AGENT)
+    task = _make_task()
     card = TaskCard(task, cbs, [task])
     qtbot.addWidget(card)
-    assert not card._type_icon.pixmap().isNull()
-    assert card._type_icon.toolTip() == "agent"
 
-
-def test_type_icon_human_tooltip(qtbot, callbacks):
-    _, cbs = callbacks
-    task = _make_task(type=TaskType.HUMAN)
-    card = TaskCard(task, cbs, [task])
-    qtbot.addWidget(card)
-    assert not card._type_icon.pixmap().isNull()
-    assert card._type_icon.toolTip() == "human"
+    assert not hasattr(card, "_type_icon")
+    chips = [
+        w
+        for w in card.findChildren(QLabel)
+        if w.objectName() == "cardTypeChip"
+        or w.property("testid") == f"task-card-{task.id}-type"
+    ]
+    assert chips == []
 
 
 def test_border_reflects_in_progress_active(qtbot, callbacks):

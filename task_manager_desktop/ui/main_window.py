@@ -16,7 +16,6 @@ from task_manager_desktop.ui.empty_state import EmptyStateLabel
 from task_manager_desktop.ui.theme import (
     SPLITTER_COLLAPSED_RATIOS,
     SPLITTER_RATIOS,
-    SPLITTER_RATIO,
     SPLITTER_SIZES,
     THEME_QSS_PATH,
     WINDOW_DEF_H,
@@ -31,7 +30,7 @@ _SETTINGS_SPLITTER = "MainWindow/splitter"
 _SETTINGS_SPLITTER_COUNT = "MainWindow/splitter_count"
 _SETTINGS_SPLITTER_SCHEMA = "MainWindow/splitter_schema"
 _SETTINGS_MIDDLE_COLLAPSED = "MainWindow/middle_collapsed"
-_SPLITTER_SCHEMA_VERSION = 3
+_SPLITTER_SCHEMA_VERSION = 4
 
 
 class MiddleColumnPane(QWidget):

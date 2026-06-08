@@ -83,7 +83,6 @@ class EditTaskController(QObject):
         # nao sobrescrever o valor atual da task com um default.
         update_fields: dict[str, object] = {
             "title": data["title"],
-            "type": data["type"],
             "deps": clean_deps,
         }
         if "favorito" in data:

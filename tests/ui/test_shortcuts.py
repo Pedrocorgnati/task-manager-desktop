@@ -6,7 +6,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import QLineEdit, QMainWindow, QPlainTextEdit, QWidget
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.shortcuts import (
     _SHORTCUT_MAP,
@@ -28,7 +28,6 @@ def _mk(tid: str, *, status: Status = Status.PENDING, order_index: int = 0) -> T
         id=tid,
         title=f"task-{tid}",
         status=status,
-        type=TaskType.HUMAN,
         deps=[],
         notes="",
         order_index=order_index,

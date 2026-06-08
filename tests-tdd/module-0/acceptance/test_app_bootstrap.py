@@ -22,7 +22,7 @@ class TestMainWindowShellFirstRun:
     """TID-0-1-012 | covers: TASK-1/ST004 BDD#1 + US-013 | suite: acceptance"""
 
     def test_main_exibe_mainwindowshell_1400x900_splitter_first_run(self, qtbot, tmp_path, monkeypatch):
-        """Verifica que MainWindowShell e criada com splitter [490,210,700] no first-run."""
+        """Verifica que MainWindowShell e criada com splitter [340,260,800] no first-run."""
         from PySide6.QtCore import QSettings
         # Limpar QSettings para garantir first-run
         s = QSettings()
@@ -38,11 +38,11 @@ class TestMainWindowShellFirstRun:
         sizes = w._splitter.sizes()
         total = sum(sizes)
         assert len(sizes) == 3
-        assert abs(sizes[0] / total - 0.35) < 0.05, (
-            f"Proporcao esquerda ~0.35, got {sizes[0]/total:.2f} (sizes={sizes})"
+        assert abs(sizes[0] / total - 0.243) < 0.05, (
+            f"Proporcao esquerda ~0.243, got {sizes[0]/total:.2f} (sizes={sizes})"
         )
-        assert abs(sizes[1] / total - 0.15) < 0.05, (
-            f"Proporcao intermediaria ~0.15, got {sizes[1]/total:.2f} (sizes={sizes})"
+        assert abs(sizes[1] / total - 0.186) < 0.05, (
+            f"Proporcao intermediaria ~0.186, got {sizes[1]/total:.2f} (sizes={sizes})"
         )
 
 

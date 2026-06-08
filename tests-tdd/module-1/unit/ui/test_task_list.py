@@ -4,7 +4,7 @@
 # target: task_manager_desktop/ui/task_list.py
 # TIDs: TID-1-1-020
 
-from task_manager_desktop.core.models import Task, TaskType
+from task_manager_desktop.core.models import Task
 from task_manager_desktop.ui.task_list import TaskList
 
 
@@ -17,7 +17,7 @@ def test_refresh_clears_previous_cards_and_shows_empty_state_when_no_tasks(qtbot
     qtbot.addWidget(tl)
 
     # First populate with a task
-    task = Task(id="a", title="T1", type=TaskType.AGENT)
+    task = Task(id="a", title="T1")
     tl.refresh([task])
 
     # Now clear

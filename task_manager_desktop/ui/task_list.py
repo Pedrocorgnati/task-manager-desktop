@@ -12,7 +12,6 @@ from PySide6.QtGui import (
     QDragEnterEvent,
     QDragMoveEvent,
     QDropEvent,
-    QImage,
     QPainter,
     QPixmap,
     QResizeEvent,
@@ -24,11 +23,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
-from task_manager_desktop.core.filters import ALL_TASK_TYPES, is_active, matches
+from task_manager_desktop.core.filters import (
+    ALL_TASK_TYPES,
+    card_matches_subtasks,
+    is_active,
+)
 from task_manager_desktop.core.models import Sector, Task, TaskType
 from task_manager_desktop.core.sector import (
     PERMANENT_ACCENT,
@@ -47,6 +51,7 @@ _log = logging.getLogger(__name__)
 # nao quebrar referencias internas.
 RENDER_ORDER: list[Sector] = [
     Sector.ACTIVE,
+    Sector.EM_PREPARACAO,
     Sector.WAITING,
     Sector.BLOCKED,
     Sector.DONE,
@@ -56,18 +61,27 @@ _SECTOR_ORDER = RENDER_ORDER
 
 _SECTOR_LABELS = {
     Sector.ACTIVE: "Em execução",
+    Sector.EM_PREPARACAO: "Em preparação",
     Sector.WAITING: "Fila",
     Sector.BLOCKED: "Bloqueadas",
     Sector.DONE: "Concluídas",
     Sector.PERMANENT: "Permanentes",
 }
 
+_SECTOR_TESTIDS = {
+    Sector.ACTIVE: "task-list-active-section",
+    Sector.EM_PREPARACAO: "task-list-preparing-section",
+    Sector.WAITING: "task-list-waiting-section",
+}
+
 _ROLE_TYPE = Qt.ItemDataRole.UserRole + 1  # "separator" | "task" | "placeholder"
 _ROLE_TASK_ID = Qt.ItemDataRole.UserRole + 2  # str task id
 _ROLE_SECTOR = Qt.ItemDataRole.UserRole + 3  # Sector.value int
+_TYPE_ACTIVE_COLLAPSE_TOGGLE = "active-collapse-toggle"
 
 _SECTOR_COLORS = {
     Sector.ACTIVE: "#22C55E",
+    Sector.EM_PREPARACAO: "#86EFAC",
     Sector.WAITING: "#EAB308",
     Sector.BLOCKED: "#A1A1AA",
     Sector.DONE: "#686C78",
@@ -75,14 +89,23 @@ _SECTOR_COLORS = {
 }
 
 
-def sort_sector_tasks(tasks: list[Task]) -> list[Task]:
+def sort_sector_tasks(tasks: list[Task], coin_favorites: dict[str, bool] | None = None) -> list[Task]:
     """Ordem determinista das tasks de um setor.
 
     Funcao pura: `(favorito DESC, order_index ASC, id ASC)` (source.md AC-13).
     Favoritos ficam no topo; o `id` como ultimo criterio garante que duas
     execucoes sobre a mesma entrada produzam exatamente a mesma ordem.
     """
-    return sorted(tasks, key=lambda t: (not t.favorito, t.order_index, t.id))
+    coin_favorites = coin_favorites or {}
+    return sorted(
+        tasks,
+        key=lambda t: (
+            -(int(bool(t.favorito)) + int(bool(coin_favorites.get(t.id, False)))),
+            not t.favorito,
+            t.order_index,
+            t.id,
+        ),
+    )
 
 
 def is_cross_block_drop(reordered_favorito_flags: list[bool]) -> bool:
@@ -99,7 +122,12 @@ def is_cross_block_drop(reordered_favorito_flags: list[bool]) -> bool:
 
 def _task_sector(task: Task, all_tasks: dict[str, Task]) -> Sector:
     has_open = count_open_deps(task.deps, all_tasks) > 0
-    sector, _ = compute_sector(task.status, has_open, task.permanente)
+    sector, _ = compute_sector(
+        task.status,
+        has_open,
+        task.permanente,
+        getattr(task, "em_preparacao", False),
+    )
     return sector
 
 
@@ -113,6 +141,12 @@ class _InnerList(QListWidget):
         self.setDefaultDropAction(Qt.DropAction.MoveAction)
         self.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Rolagem suave por pixel: o default ScrollPerItem saltava um card
+        # inteiro por entalhe da roda (sensacao de "deslocar o bloco inteiro").
+        # ScrollPerPixel + singleStep pequeno faz a lista descer suavemente,
+        # fracao de card por entalhe, sem pulos bruscos.
+        self.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.verticalScrollBar().setSingleStep(22)
         self.setObjectName("taskListWidget")
         self.setProperty("testid", "task-list-widget")
         self.setSpacing(5)
@@ -373,6 +407,8 @@ class TaskList(QWidget):
         self._repo: TaskRepository | None = None
         self._main_window: QWidget | None = None
         self._task_types: frozenset[str] = ALL_TASK_TYPES
+        self._active_only_collapsed = False
+        self._coin_favorites: dict[str, bool] = {}
         # Overlay ancorado no canto inferior direito (ver attach_test_mode_grid).
         self._test_mode_grid: QWidget | None = None
 
@@ -490,6 +526,27 @@ class TaskList(QWidget):
                 card.pulse()
                 break
 
+    def sync_task_notes(self, task_id: str, notes: str) -> None:
+        """Reconcilia o cache em memoria apos um save de notas do reader.
+
+        O painel Markdown persiste as notas direto no banco, mas os objetos
+        Task vivem em cache aqui (self._tasks) e dentro de cada TaskCard. Sem
+        esta reconciliacao, re-selecionar o mesmo card re-emite o Task antigo
+        e o editor recarrega o texto pre-edicao — efeito "perdi tudo que escrevi".
+        """
+        import dataclasses
+
+        from task_manager_desktop.ui.task_card import TaskCard
+
+        for idx, task in enumerate(self._tasks):
+            if task.id == task_id:
+                self._tasks[idx] = dataclasses.replace(task, notes=notes)
+                break
+        for card in self._cards:
+            if isinstance(card, TaskCard) and card._task.id == task_id:
+                card._task = dataclasses.replace(card._task, notes=notes)
+                break
+
     def set_filters(
         self,
         task_types: Iterable[str | TaskType] | None = None,
@@ -506,6 +563,12 @@ class TaskList(QWidget):
         task_types: Iterable[str | TaskType] | None = None,
     ) -> None:
         self.set_filters(task_types=task_types)
+
+    def set_coin_favorite(self, task_id: str, value: bool) -> None:
+        self._coin_favorites[task_id] = bool(value)
+
+    def is_coin_favorite(self, task_id: str) -> bool:
+        return bool(self._coin_favorites.get(task_id, False))
 
     def has_selection(self) -> bool:
         return self.get_selected_task() is not None
@@ -586,21 +649,46 @@ class TaskList(QWidget):
     # Internal rebuild
     # ------------------------------------------------------------------
 
+    def _subtask_types_by_task(self) -> dict[str, set[str]]:
+        """Mapa task_id -> tipos das subtasks, lido do repo (uma query).
+
+        Sem repo (ex.: cards montados a partir de cache em testes) retorna {}.
+        Falha de I/O nunca derruba a render: o filtro trata o card como "sem
+        subtasks" (some sob filtro ativo), e o erro e logado.
+        """
+        if self._repo is None:
+            return {}
+        try:
+            return self._repo.subtask_types_by_task()
+        except Exception:
+            _log.exception("task_list.subtask_types_lookup_failed")
+            return {}
+
     def _rebuild(self, tasks: list[Task]) -> None:
         self._inner.clear()
         self._cards = []
         all_tasks: dict[str, Task] = {t.id: t for t in tasks}
 
+        # Regra de visibilidade do card principal (o tipo migrou para as
+        # subtasks): com os 3 checkboxes marcados (filtro inativo) renderizam
+        # TODOS os cards, inclusive os sem subtasks. Ao desmarcar qualquer
+        # tipo, o filtro passa a valer e so renderizam os cards que possuem ao
+        # menos uma subtask de um tipo selecionado.
         filter_active = is_active(task_types=self._task_types)
-        visible_tasks = (
-            [t for t in tasks if matches(t, task_types=self._task_types)]
-            if filter_active
-            else list(tasks)
-        )
+        if filter_active:
+            sub_types = self._subtask_types_by_task()
+            visible_tasks = [
+                t
+                for t in tasks
+                if card_matches_subtasks(
+                    sub_types.get(t.id, ()), task_types=self._task_types
+                )
+            ]
+        else:
+            visible_tasks = list(tasks)
 
         # CL-030: banco vazio exibe 4 headers + placeholder; empty_label so para "sem resultados de filtro"
         filter_no_match = filter_active and not visible_tasks
-        empty_no_tasks = not tasks and not filter_active
 
         self._empty_label.setVisible(False)
         self._empty_filter_label.setVisible(filter_no_match)
@@ -614,10 +702,12 @@ class TaskList(QWidget):
             groups[_task_sector(task, all_tasks)].append(task)
         # Ordem determinista por setor: favorito DESC, order_index ASC, id ASC.
         for sector_key in groups:
-            groups[sector_key] = sort_sector_tasks(groups[sector_key])
+            groups[sector_key] = sort_sector_tasks(groups[sector_key], self._coin_favorites)
 
         for sector in _SECTOR_ORDER:
             sector_tasks = groups[sector]
+            if self._active_only_collapsed and sector != Sector.ACTIVE:
+                continue
             if filter_active and not sector_tasks:
                 continue
             # O setor Permanentes nao e um setor-base sempre visivel: so
@@ -625,12 +715,18 @@ class TaskList(QWidget):
             # "Permanentes" vazio seria ruido (source.md secao 3.6).
             if sector == Sector.PERMANENT and not sector_tasks:
                 continue
+            # "Em preparação" e um setor opt-in: so aparece quando ha alguma
+            # task marcada manualmente; um header vazio seria ruido.
+            if sector == Sector.EM_PREPARACAO and not sector_tasks:
+                continue
             self._add_separator(sector)
             if not sector_tasks:
                 self._add_placeholder(sector)
             else:
                 for task in sector_tasks:
                     self._add_task_item(task, tasks, all_tasks, sector)
+            if sector == Sector.ACTIVE and sector_tasks:
+                self._add_active_collapse_toggle()
 
     def _add_separator(self, sector: Sector) -> None:
         item = QListWidgetItem(_SECTOR_LABELS[sector])
@@ -642,6 +738,9 @@ class TaskList(QWidget):
 
         row = QWidget(self._inner)
         row.setObjectName("sectorHeaderRow")
+        testid = _SECTOR_TESTIDS.get(sector)
+        if testid is not None:
+            row.setProperty("testid", testid)
         layout = QHBoxLayout(row)
         layout.setContentsMargins(6, 6, 6, 3)
         layout.setSpacing(10)
@@ -660,6 +759,47 @@ class TaskList(QWidget):
         layout.addWidget(rule, 1)
 
         self._inner.setItemWidget(item, row)
+
+    def _add_active_collapse_toggle(self) -> None:
+        item = QListWidgetItem()
+        item.setData(_ROLE_TYPE, _TYPE_ACTIVE_COLLAPSE_TOGGLE)
+        item.setData(_ROLE_SECTOR, Sector.ACTIVE.value)
+        item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+        item.setSizeHint(QSize(1, 28))
+        self._inner.addItem(item)
+
+        row = QWidget(self._inner)
+        row.setObjectName("activeCollapseRow")
+        row.setProperty("testid", "active-collapse-row")
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(6, 0, 6, 3)
+        layout.setSpacing(0)
+
+        button = QToolButton(row)
+        button.setObjectName("activeCollapseButton")
+        button.setProperty("testid", "active-collapse-button")
+        button.setText("⌃" if self._active_only_collapsed else "⌄")
+        button.setAccessibleName(
+            "Mostrar todos os setores"
+            if self._active_only_collapsed
+            else "Mostrar apenas tasks em execução"
+        )
+        button.setToolTip(
+            "Mostrar todos os setores"
+            if self._active_only_collapsed
+            else "Mostrar apenas tasks em execução"
+        )
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(self._toggle_active_only_collapsed)
+
+        layout.addStretch(1)
+        layout.addWidget(button)
+        layout.addStretch(1)
+        self._inner.setItemWidget(item, row)
+
+    def _toggle_active_only_collapsed(self) -> None:
+        self._active_only_collapsed = not self._active_only_collapsed
+        self._rebuild(self._tasks)
 
     def _add_placeholder(self, sector: Sector) -> None:
         item = QListWidgetItem("vazio")
@@ -694,6 +834,13 @@ class TaskList(QWidget):
 
         card = TaskCard(task, self._callbacks, all_tasks_list, self._inner)
         card.selected.connect(self.task_selected.emit)
+        if task.permanente and self._repo is not None:
+            try:
+                due_at = self._repo.get_permanent_schedule(task.id)
+                if due_at:
+                    card.set_schedule_active(due_at)
+            except Exception:
+                pass
         # Mantem a altura do item alinhada ao card real para evitar "gaps"
         # visuais grandes entre cards. O espacamento entre itens fica sob
         # controle exclusivo do QListWidget.setSpacing(5).

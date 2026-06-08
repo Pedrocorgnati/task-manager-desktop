@@ -23,7 +23,7 @@ import pytest
 from PySide6.QtCore import Qt
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.header import HeaderBar
 
@@ -56,7 +56,6 @@ def _task(tid: str, status: Status = Status.PENDING, hidden_at: str | None = Non
         id=tid,
         title=f"Task {tid}",
         status=status,
-        type=TaskType.AGENT,
         deps=[],
     )
     return t
@@ -279,7 +278,7 @@ def test_ac_t009_in_progress_tasks_not_hidden(repo):
     """AC-T-009: Tasks in_progress NÃO são afetadas por hide_all_done."""
     t = Task(
         id="ip1", title="In Progress", status=Status.IN_PROGRESS,
-        type=TaskType.AGENT, deps=[],
+        deps=[],
     )
     repo.create(t)
     _create_done(repo, "d1")

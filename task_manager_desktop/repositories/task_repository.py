@@ -7,6 +7,7 @@ from pathlib import Path
 
 from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.core.models import (
+    ClockTimer,
     Status,
     Subtask,
     Task,
@@ -136,6 +137,20 @@ def _validate_order_index(value: object) -> int:
     return value
 
 
+def _normalize_utc_iso(value: object, field_name: str) -> str:
+    """Valida e normaliza timestamps ISO para comparacao lexicografica segura."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field_name} deve ser uma string ISO-8601 nao vazia")
+    raw = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} deve ser ISO-8601 valido") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat(timespec="seconds")
+
+
 def _enforce_single_row(rowcount: int, row_id: object, op: str) -> None:
     """Aplica o contrato de UPDATE de linha unica por `id`.
 
@@ -217,17 +232,17 @@ def _normalize_flag(raw: object, column: str, task_id: object) -> bool:
 def _row_to_task(row: sqlite3.Row) -> Task:
     """Mapeia uma linha de `tasks` para Task, validando o dominio das colunas.
 
-    Colunas enumeradas (status, type) e booleanas (favorito, permanente) sao
+    Colunas enumeradas (status) e booleanas (favorito, permanente) sao
     validadas/normalizadas no load: um valor corrompido (NULL, caixa errada,
     'yes', etc.) levanta DataCorruptionError nomeando o task_id e a coluna,
-    em vez de estourar um ValueError opaco de Status()/TaskType().
+    em vez de estourar um ValueError opaco de Status(). A task nao tem mais
+    coluna `type` (migration v10) — o tipo vive nas subtasks.
     """
     task_id = row["id"]
     return Task(
         id=task_id,
         title=row["title"],
         status=Status(_normalize_enum(row["status"], _VALID_STATUS, "status", task_id)),
-        type=TaskType(_normalize_enum(row["type"], _VALID_TYPE, "type", task_id)),
         deps=parse_deps(row["deps"] or ""),
         notes=row["notes"] or "",
         order_index=row["order_index"] or 0,
@@ -236,11 +251,20 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         hidden_at=row["hidden_at"],
         favorito=_normalize_flag(row["favorito"], "favorito", task_id),
         permanente=_normalize_flag(row["permanente"], "permanente", task_id),
+        em_preparacao=_normalize_flag(
+            row["em_preparacao"], "em_preparacao", task_id
+        ),
     )
 
 
 def _row_to_subtask(row: sqlite3.Row) -> Subtask:
     state = int(row["done"] or 0)
+    # `type` chegou na migration v9; bancos lidos antes dela (ou rows sem a
+    # coluna por divergencia) caem no default canonico 'agent'.
+    raw_type = row["type"] if "type" in row.keys() else "agent"
+    subtask_type = (
+        TaskType(raw_type) if raw_type in _VALID_TYPE else TaskType.AGENT
+    )
     return Subtask(
         id=row["id"],
         task_id=row["task_id"],
@@ -250,6 +274,28 @@ def _row_to_subtask(row: sqlite3.Row) -> Subtask:
         order_index=row["order_index"] or 0,
         state=state,
         notes=row["notes"] or "",
+        type=subtask_type,
+    )
+
+
+def _row_to_clock_timer(row: sqlite3.Row) -> ClockTimer:
+    ends_at = str(row["ends_at"] or "")
+    remaining = int(row["remaining_seconds"] or 0)
+    if not ends_at:
+        ends_at = datetime.now(timezone.utc).isoformat()
+    return ClockTimer(
+        id=row["id"],
+        title=row["title"],
+        duration_seconds=int(row["duration_seconds"] or 0),
+        remaining_seconds=remaining,
+        ends_at=ends_at,
+        color=str(row["color"] or "#71717A"),
+        state=str(row["state"] or "running"),
+        paused=bool(int(row["paused"] or 0)),
+        paused_at=row["paused_at"],
+        kind=(str(row["kind"]) if ("kind" in row.keys() and row["kind"]) else "normal"),
+        created_at=str(row["created_at"] or ""),
+        updated_at=str(row["updated_at"] or ""),
     )
 
 
@@ -262,26 +308,98 @@ class TaskRepository:
         # (touch incondicional la), mas `subtasks` nao tem a coluna; o touch em
         # update_subtask_text e condicional via _subtasks_has_updated_at().
         self._subtasks_updated_at_supported: bool | None = None
+        self._clock_timer_table_ready = False
+        self._permanent_schedule_table_ready = False
+
+    def _ensure_clock_timers_table(self) -> None:
+        if self._clock_timer_table_ready:
+            return
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS clock_timers (
+                id TEXT PRIMARY KEY,
+                title TEXT NOT NULL,
+                duration_seconds INTEGER NOT NULL CHECK(duration_seconds >= 0),
+                remaining_seconds INTEGER NOT NULL CHECK(remaining_seconds >= 0),
+                ends_at TEXT NOT NULL DEFAULT '',
+                color TEXT NOT NULL DEFAULT '#71717A',
+                state TEXT NOT NULL CHECK(state IN ('running', 'done')),
+                paused INTEGER NOT NULL DEFAULT 0 CHECK(paused IN (0, 1)),
+                paused_at TEXT NULL,
+                kind TEXT NOT NULL DEFAULT 'normal',
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cols = {row[1] for row in self._conn.execute("PRAGMA table_info(clock_timers)")}
+        if "paused" not in cols:
+            self._conn.execute(
+                "ALTER TABLE clock_timers ADD COLUMN paused INTEGER NOT NULL DEFAULT 0 CHECK(paused IN (0, 1))"
+            )
+        if "ends_at" not in cols:
+            self._conn.execute(
+                "ALTER TABLE clock_timers ADD COLUMN ends_at TEXT NOT NULL DEFAULT ''"
+            )
+        if "paused_at" not in cols:
+            self._conn.execute(
+                "ALTER TABLE clock_timers ADD COLUMN paused_at TEXT NULL"
+            )
+        if "color" not in cols:
+            self._conn.execute(
+                "ALTER TABLE clock_timers ADD COLUMN color TEXT NOT NULL DEFAULT '#71717A'"
+            )
+        if "kind" not in cols:
+            # Timers pre-existentes nao tem kind -> migram para a div 'normal'
+            # (div Timers), preservando o comportamento atual.
+            self._conn.execute(
+                "ALTER TABLE clock_timers ADD COLUMN kind TEXT NOT NULL DEFAULT 'normal'"
+            )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_clock_timers_state ON clock_timers(state)"
+        )
+        self._conn.commit()
+        self._clock_timer_table_ready = True
+
+    def _ensure_permanent_schedules_table(self) -> None:
+        if self._permanent_schedule_table_ready:
+            return
+        self._conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS permanent_task_schedules (
+                task_id TEXT PRIMARY KEY REFERENCES tasks(id) ON DELETE CASCADE,
+                due_at TEXT NOT NULL,
+                created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_permanent_task_schedules_due_at "
+            "ON permanent_task_schedules(due_at)"
+        )
+        self._conn.commit()
+        self._permanent_schedule_table_ready = True
 
     def create(self, task: Task) -> None:
         self._conn.execute(
             """
             INSERT INTO tasks
-                (id, title, status, type, deps, notes, order_index, created_at,
-                 favorito, permanente)
+                (id, title, status, deps, notes, order_index, created_at,
+                 favorito, permanente, em_preparacao)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task.id,
                 task.title,
                 task.status.value,
-                task.type.value,
                 ",".join(task.deps),
                 task.notes,
                 _validate_order_index(task.order_index),
                 task.created_at or datetime.now(timezone.utc).isoformat(),
                 _flag_to_int(task.favorito, "favorito"),
                 _flag_to_int(task.permanente, "permanente"),
+                _flag_to_int(task.em_preparacao, "em_preparacao"),
             ),
         )
         self._conn.commit()
@@ -298,13 +416,13 @@ class TaskRepository:
         allowed = {
             "title",
             "status",
-            "type",
             "deps",
             "notes",
             "order_index",
             "completed_at",
             "favorito",
             "permanente",
+            "em_preparacao",
         }
         col_map: dict[str, object] = {}
         for key, val in fields.items():
@@ -314,9 +432,7 @@ class TaskRepository:
                 col_map["deps"] = ",".join(val)
             elif key == "status" and isinstance(val, Status):
                 col_map["status"] = val.value
-            elif key == "type" and isinstance(val, TaskType):
-                col_map["type"] = val.value
-            elif key in ("favorito", "permanente"):
+            elif key in ("favorito", "permanente", "em_preparacao"):
                 col_map[key] = _flag_to_int(val, key)
             elif key == "order_index":
                 col_map[key] = _validate_order_index(val)
@@ -417,6 +533,103 @@ class TaskRepository:
         `hidden_at` (source.md secao 1.9 / AC-11) via unhide_if_done.
         """
         self._update_flag(task_id, "permanente", value, unhide_if_done=True)
+
+    def update_em_preparacao(self, task_id: str, value: bool) -> None:
+        """Marca/desmarca a flag manual do setor "Em preparação".
+
+        Ver _update_flag para contratos (rowcount, touch de updated_at).
+        em_preparacao nunca afeta `hidden_at`.
+        """
+        self._update_flag(task_id, "em_preparacao", value)
+
+    def schedule_permanent_task(self, task_id: str, due_at: str) -> None:
+        """Agenda uma task permanente para voltar a IN_PROGRESS em ``due_at``.
+
+        O agendamento e separado do status atual: mover manualmente a task antes
+        do vencimento nao cancela nem altera este prazo.
+        """
+        normalized_due_at = _normalize_utc_iso(due_at, "due_at")
+        self._ensure_permanent_schedules_table()
+        row = self._conn.execute(
+            "SELECT permanente FROM tasks WHERE id = ?", (task_id,)
+        ).fetchone()
+        if row is None:
+            raise TaskNotFoundError(f"Task {task_id!r} não encontrada")
+        if not _normalize_flag(row["permanente"], "permanente", task_id):
+            raise ValueError("apenas tasks permanentes podem ser agendadas")
+        self._conn.execute(
+            """
+            INSERT INTO permanent_task_schedules (task_id, due_at)
+            VALUES (?, ?)
+            ON CONFLICT(task_id) DO UPDATE SET
+                due_at = excluded.due_at,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (task_id, normalized_due_at),
+        )
+        self._conn.commit()
+
+    def get_permanent_schedule(self, task_id: str) -> str | None:
+        """Retorna o due_at agendado para a task, ou None se não houver."""
+        self._ensure_permanent_schedules_table()
+        row = self._conn.execute(
+            "SELECT due_at FROM permanent_task_schedules WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()
+        return row["due_at"] if row else None
+
+    def trigger_due_permanent_schedules(self, now_iso: str) -> list[Task]:
+        """Dispara agendamentos vencidos e retorna as tasks atualizadas.
+
+        Mesmo se a task ja estiver em IN_PROGRESS, o UPDATE e executado para
+        tocar updated_at e registrar a ida agendada para execucao.
+        """
+        normalized_now = _normalize_utc_iso(now_iso, "now_iso")
+        self._ensure_permanent_schedules_table()
+        with self._conn:
+            self._conn.execute(
+                """
+                DELETE FROM permanent_task_schedules
+                WHERE task_id IN (
+                    SELECT s.task_id
+                    FROM permanent_task_schedules s
+                    LEFT JOIN tasks t ON t.id = s.task_id
+                    WHERE t.id IS NULL OR t.permanente != 1
+                )
+                """
+            )
+            rows = self._conn.execute(
+                """
+                SELECT s.task_id
+                FROM permanent_task_schedules s
+                JOIN tasks t ON t.id = s.task_id
+                WHERE s.due_at <= ?
+                  AND t.permanente = 1
+                ORDER BY s.due_at ASC, s.task_id ASC
+                """,
+                (normalized_now,),
+            ).fetchall()
+            task_ids = [row["task_id"] for row in rows]
+            if not task_ids:
+                return []
+            self._conn.executemany(
+                """
+                UPDATE tasks
+                SET status = ?, completed_at = NULL, hidden_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                [(Status.IN_PROGRESS.value, task_id) for task_id in task_ids],
+            )
+            self._conn.executemany(
+                "DELETE FROM permanent_task_schedules WHERE task_id = ?",
+                [(task_id,) for task_id in task_ids],
+            )
+        return [
+            task
+            for task_id in task_ids
+            if (task := self.get_by_id(task_id)) is not None
+        ]
 
     def list_active(self) -> list[Task]:
         rows = self._conn.execute(
@@ -565,11 +778,27 @@ class TaskRepository:
         ).fetchall()
         return [_row_to_subtask(row) for row in rows]
 
+    def subtask_types_by_task(self) -> dict[str, set[str]]:
+        """Mapa task_id -> conjunto dos tipos (agent/dev/human) de suas subtasks.
+
+        Consulta unica (sem N+1) usada pelo filtro de tipo do header para decidir
+        a visibilidade de cada card principal: um card so e visivel, sob filtro
+        ativo, se possuir ao menos uma subtask de um tipo selecionado. Tasks sem
+        subtasks simplesmente nao aparecem no mapa (conjunto vazio implicito).
+        Valores fora do dominio canonico (banco divergente) caem em 'agent'.
+        """
+        result: dict[str, set[str]] = {}
+        for row in self._conn.execute("SELECT DISTINCT task_id, type FROM subtasks"):
+            raw_type = row["type"] if "type" in row.keys() else "agent"
+            value = raw_type if raw_type in _VALID_TYPE else "agent"
+            result.setdefault(row["task_id"], set()).add(value)
+        return result
+
     def create_subtask(self, subtask: Subtask) -> None:
         self._conn.execute(
             """
-            INSERT INTO subtasks (id, task_id, text, done, color, order_index, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO subtasks (id, task_id, text, done, color, order_index, notes, type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 subtask.id,
@@ -579,6 +808,7 @@ class TaskRepository:
                 subtask.color,
                 _validate_order_index(subtask.order_index),
                 subtask.notes,
+                subtask.type.value,
             ),
         )
         self._conn.commit()
@@ -606,11 +836,34 @@ class TaskRepository:
                 validated,
             )
 
-    def delete_done_subtasks(self, task_id: str) -> int:
+    def delete_done_subtasks(
+        self, task_id: str, types: set[str] | frozenset[str] | None = None
+    ) -> int:
+        """Remove as subtasks concluidas (done == 2) de uma task.
+
+        Quando `types` e informado, restringe a remocao aos tipos dados — usado
+        pela subtask pane quando o filtro de tipo do header esta ativo, para que
+        "limpar concluidas" nao apague subtasks de tipos que estao OCULTOS na
+        view (perda de dados silenciosa). `types == None` remove todas (o
+        comportamento padrao quando o filtro esta inativo / todos os tipos).
+        Tipos fora do dominio canonico sao ignorados; lista vazia -> no-op.
+        """
+        if types is None:
+            with self._conn:
+                cursor = self._conn.execute(
+                    "DELETE FROM subtasks WHERE task_id = ? AND done = 2",
+                    (task_id,),
+                )
+                return cursor.rowcount
+        valid = [t for t in types if t in _VALID_TYPE]
+        if not valid:
+            return 0
+        placeholders = ", ".join("?" for _ in valid)
         with self._conn:
             cursor = self._conn.execute(
-                "DELETE FROM subtasks WHERE task_id = ? AND done = 2",
-                (task_id,),
+                f"DELETE FROM subtasks WHERE task_id = ? AND done = 2 "
+                f"AND type IN ({placeholders})",
+                (task_id, *valid),
             )
             return cursor.rowcount
 
@@ -620,6 +873,28 @@ class TaskRepository:
             (notes, subtask_id),
         )
         self._conn.commit()
+
+    def update_subtask_type(self, subtask_id: str, type: TaskType | str) -> None:
+        """Persiste o tipo (agent/dev/human) de uma subtask.
+
+        Aceita tanto TaskType quanto a string canonica; valores fora do dominio
+        sao rejeitados antes do UPDATE para nao gravar lixo (o CHECK da coluna
+        ja blindaria, mas o fail-fast aqui produz um erro explicito).
+        """
+        value = type.value if isinstance(type, TaskType) else str(type)
+        if value not in _VALID_TYPE:
+            raise ValueError(
+                f"tipo de subtask invalido {value!r}; esperado um de {_VALID_TYPE}"
+            )
+        cursor = self._conn.execute(
+            "UPDATE subtasks SET type = ? WHERE id = ?",
+            (value, subtask_id),
+        )
+        self._conn.commit()
+        if cursor.rowcount == 0:
+            # Simetria com update_subtask_text: subtask inexistente e erro
+            # explicito, nao um no-op silencioso.
+            raise SubtaskNotFoundError(f"Subtask {subtask_id!r} não encontrada")
 
     def _subtasks_has_updated_at(self) -> bool:
         """Detecta (uma vez por instancia) se a tabela `subtasks` tem updated_at.
@@ -669,3 +944,74 @@ class TaskRepository:
                 f"update_subtask_text afetou {cursor.rowcount} linhas para "
                 f"id {subtask_id!r}; a coluna id deveria ser unica"
             )
+
+    def list_clock_timers(self, kind: str | None = None) -> list[ClockTimer]:
+        """Lista timers. Com ``kind`` informado, restringe à div correspondente
+        ('normal' = div Timers, 'daily' = div Daily Timers). Sem ``kind`` (default),
+        retorna todos — preserva o contrato histórico de chamadores sem escopo."""
+        self._ensure_clock_timers_table()
+        if kind is None:
+            rows = self._conn.execute(
+                "SELECT * FROM clock_timers ORDER BY created_at ASC, id ASC"
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT * FROM clock_timers WHERE kind = ? ORDER BY created_at ASC, id ASC",
+                (kind,),
+            ).fetchall()
+        return [_row_to_clock_timer(row) for row in rows]
+
+    def create_clock_timer(self, timer: ClockTimer) -> None:
+        self._ensure_clock_timers_table()
+        self._conn.execute(
+            """
+            INSERT INTO clock_timers
+                (id, title, duration_seconds, remaining_seconds, ends_at, color, state, paused, paused_at, kind)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                timer.id,
+                timer.title,
+                int(timer.duration_seconds),
+                int(timer.remaining_seconds),
+                timer.ends_at,
+                timer.color,
+                timer.state,
+                1 if timer.paused else 0,
+                timer.paused_at,
+                timer.kind or "normal",
+            ),
+        )
+        self._conn.commit()
+
+    def update_clock_timer(self, timer: ClockTimer) -> None:
+        self._ensure_clock_timers_table()
+        cursor = self._conn.execute(
+            """
+            UPDATE clock_timers
+            SET title = ?, duration_seconds = ?, remaining_seconds = ?, ends_at = ?, color = ?,
+                state = ?, paused = ?, paused_at = ?, kind = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                timer.title,
+                int(timer.duration_seconds),
+                int(timer.remaining_seconds),
+                timer.ends_at,
+                timer.color,
+                timer.state,
+                1 if timer.paused else 0,
+                timer.paused_at,
+                timer.kind or "normal",
+                timer.id,
+            ),
+        )
+        self._conn.commit()
+        if cursor.rowcount == 0:
+            raise TaskNotFoundError(f"ClockTimer {timer.id!r} não encontrado")
+
+    def delete_clock_timer(self, timer_id: str) -> None:
+        self._ensure_clock_timers_table()
+        self._conn.execute("DELETE FROM clock_timers WHERE id = ?", (timer_id,))
+        self._conn.commit()

@@ -8,16 +8,14 @@ Full integration tests against MainWindow + real DB are deferred to manual QA
 from __future__ import annotations
 
 import pytest
-from PySide6.QtCore import Qt
 
 from task_manager_desktop.core.db import run_migrations
-from task_manager_desktop.core.models import Status, Task, TaskType
+from task_manager_desktop.core.models import Status, Task
 from task_manager_desktop.repositories.task_repository import TaskRepository
 from task_manager_desktop.ui.shortcuts import (
-    ControllerBundle,
-    ShortcutsController,
     _SHORTCUT_MAP,
     _SUPPRESS_IN_TEXT,
+    ControllerBundle,
     register_all,
 )
 from task_manager_desktop.ui.task_list import TaskList
@@ -34,7 +32,6 @@ def _make_task(repo: TaskRepository, *, tid: str, title: str) -> Task:
         id=tid,
         title=title,
         status=Status.PENDING,
-        type=TaskType.HUMAN,
         deps=[],
         notes="",
         order_index=1,
