@@ -42,7 +42,7 @@ Nota: PySide6 instala via pip e nao requer build-deps adicionais no Ubuntu.
 ## Instalacao
 
 ```bash
-git clone git@github.com:Pedromurta/task-manager-desktop.git
+git clone git@github.com:Pedrocorgnati/task-manager-desktop.git
 cd task-manager-desktop
 python3 -m venv .venv
 .venv/bin/pip install -e .
@@ -76,7 +76,7 @@ desktop-file-validate ~/.local/share/applications/task-manager-desktop.desktop
 ## Bootstrap (copiar e colar)
 
 ```bash
-git clone git@github.com:Pedromurta/task-manager-desktop.git
+git clone git@github.com:Pedrocorgnati/task-manager-desktop.git
 cd task-manager-desktop
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
@@ -241,4 +241,4 @@ Apos a migracao, valide visualmente que tudo esta correto e remova o backup quan
 
 Distribuido sob GNU General Public License v3.0. Veja [LICENSE](./LICENSE) para o texto completo.
 
-Copyright (C) 2026 Pedro Murta
+Copyright (C) 2026 Pedro Corgnati

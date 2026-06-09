@@ -137,7 +137,7 @@ class HeaderBar(QWidget):
         ("imbound-queries.txt", "ai-forge/lead-finder/output/imbound-queries.txt"),
         ("imbound-prepare.txt", "ai-forge/lead-finder/output/imbound-prepare.txt"),
         ("ASSETS-TO-CREATE.md", "forged-goods/assets/ASSETS-TO-CREATE.md"),
-        ("pedro-murta.md", "forged-goods/assets/pedro-murta.md"),
+        ("pedro-corgnati.md", "forged-goods/assets/pedro-corgnati.md"),
         ("lessie-results.md", "ai-forge/lead-finder/lessie-prompts/results/lessie-results.md"),
         ("WORKFLOW-DETAILED.md", "WORKFLOW-DETAILED.md"),
     )

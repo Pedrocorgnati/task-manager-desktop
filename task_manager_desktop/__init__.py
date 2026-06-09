@@ -1,5 +1,5 @@
 # Task Manager Desktop — gerenciador pessoal de tasks offline-first.
-# Copyright (C) 2026 Pedro Murta
+# Copyright (C) 2026 Pedro Corgnati
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,4 +15,4 @@
 # along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 __version__ = "0.1.0"
-__author__ = "Pedro Murta"
+__author__ = "Pedro Corgnati"

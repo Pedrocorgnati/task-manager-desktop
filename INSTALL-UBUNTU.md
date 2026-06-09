@@ -239,6 +239,6 @@ sudo apt install xdg-utils libgtk-3-0
 ---
 
 **Suporte:**
-- Reporte bugs em: https://github.com/Pedromurta/task-manager-desktop/issues
+- Reporte bugs em: https://github.com/Pedrocorgnati/task-manager-desktop/issues
 - Documentação completa: Ver README.md
 
