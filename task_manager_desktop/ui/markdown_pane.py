@@ -8,11 +8,9 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QClipboard, QColor, QHideEvent, QKeySequence, QPalette, QShortcut
+from PySide6.QtCore import QSettings, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QHideEvent, QKeySequence, QPalette, QShortcut
 from PySide6.QtWidgets import (
-    QApplication,
-    QGraphicsDropShadowEffect,
     QPushButton,
     QStackedWidget,
     QVBoxLayout,
@@ -20,8 +18,8 @@ from PySide6.QtWidgets import (
 )
 
 from task_manager_desktop.core.exceptions import TaskNotFoundError
+from task_manager_desktop.ui import external_paste
 from task_manager_desktop.ui.editor_toolbar import EditorToolbar
-from task_manager_desktop.ui.icons import SEND_ARROW_SVG, svg_to_icon
 from task_manager_desktop.ui.markdown_editor import MarkdownEditor
 from task_manager_desktop.ui.markdown_viewer import MarkdownViewer
 
@@ -30,7 +28,10 @@ if TYPE_CHECKING:
     from task_manager_desktop.repositories.task_repository import TaskRepository
 
 
-_EXTERNAL_PASTE_DELAY_MS = 2000
+# Aliases de retrocompatibilidade: a logica canonica vive em external_paste.py
+# (compartilhada com outros apps do AI Forge); testes/codigo antigo monkeypatcham
+# estes nomes no namespace deste modulo.
+_EXTERNAL_PASTE_DELAY_MS = external_paste.EXTERNAL_PASTE_DELAY_MS
 _SETTINGS_READER_FONT_DELTA = "MarkdownReader/font_delta"
 _READER_FONT_DELTA_MIN = -4
 _READER_FONT_DELTA_MAX = 8
@@ -73,21 +74,7 @@ def _atomic_write_text(path: Path, text: str) -> None:
             pass
         raise
 
-# Marcadores de WM_CLASS (substring, case-insensitive) de terminais conhecidos.
-# Terminais colam por Shift+Insert. Ctrl+Shift+V pode atravessar alguns TUIs
-# como atalho proprio; no Codex, por exemplo, dispara o fluxo de colar imagem.
-# O restante das janelas usa Ctrl+V.
-_TERMINAL_WM_CLASS_MARKERS = (
-    "term",        # gnome-terminal, xfce4-terminal, qterminal, xterm, wezterm, terminator...
-    "konsole",
-    "alacritty",
-    "kitty",
-    "tilix",
-    "urxvt",
-    "rxvt",
-    "foot",
-    "st-256color",
-)
+_TERMINAL_WM_CLASS_MARKERS = external_paste.TERMINAL_WM_CLASS_MARKERS
 
 
 class MarkdownPane(QWidget):
@@ -392,35 +379,7 @@ class MarkdownPane(QWidget):
         self._apply_reader_theme()
 
     def _configure_external_paste_button(self) -> None:
-        self._external_paste_button.setObjectName("markdownExternalPasteButton")
-        self._external_paste_button.setProperty("testid", "markdown-external-paste-button")
-        self._external_paste_button.setProperty("data-testid", "markdown-external-paste-button")
-        self._external_paste_button.setAccessibleName("Colar markdown na janela focada")
-        self._external_paste_button.setToolTip("Colar markdown na janela focada em 2 segundos")
-        self._external_paste_button.setFixedSize(56, 56)
-        self._external_paste_button.setIcon(svg_to_icon(SEND_ARROW_SVG, 30))
-        self._external_paste_button.setIconSize(QSize(30, 30))
-        self._external_paste_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._external_paste_button.setStyleSheet(
-            "QPushButton#markdownExternalPasteButton {"
-            " background-color: #2563EB; border: 1px solid #60A5FA;"
-            " border-radius: 28px; padding: 0;"
-            "}"
-            "QPushButton#markdownExternalPasteButton:hover {"
-            " background-color: #1D4ED8; border-color: #93C5FD;"
-            "}"
-            "QPushButton#markdownExternalPasteButton:pressed {"
-            " background-color: #1E40AF; padding-top: 2px;"
-            "}"
-            "QPushButton#markdownExternalPasteButton:disabled {"
-            " background-color: #334155; border-color: #475569;"
-            "}"
-        )
-        shadow = QGraphicsDropShadowEffect(self._external_paste_button)
-        shadow.setBlurRadius(26)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 150))
-        self._external_paste_button.setGraphicsEffect(shadow)
+        external_paste.style_external_paste_button(self._external_paste_button)
         self._external_paste_button.hide()
 
     def _position_external_paste_button(self) -> None:
@@ -449,59 +408,28 @@ class MarkdownPane(QWidget):
     def _detect_paste_shortcut(self) -> str:
         """Escolhe a combinacao de paste conforme a janela focada.
 
-        Terminais usam Ctrl+Shift+V; o restante usa Ctrl+V. O Shift+Insert
-        anterior falhava em boa parte dos terminais (GNOME Terminal, Konsole,
-        Tilix, xfce4-terminal...) porque cola da selecao PRIMARY, nao do
-        clipboard — e em varios esta desligado por default. Ctrl+Shift+V e o
-        atalho canonico de paste do clipboard nesses terminais. Estas leituras
-        sao rapidas e acontecem ANTES do paste, entao nao concorrem com o
-        serving do clipboard. Qualquer falha de deteccao cai no Ctrl+V historico
-        — sem travar o paste.
+        Logica canonica em ``external_paste.detect_paste_shortcut`` (compartilhada
+        com outros apps do AI Forge). Mantido como metodo para permitir override
+        em testes/subclasses; o global ``_TERMINAL_WM_CLASS_MARKERS`` deste modulo
+        e lido em call time, preservando o seam de monkeypatch historico.
         """
-        try:
-            win = subprocess.run(
-                ["xdotool", "getactivewindow"],
-                capture_output=True, text=True, timeout=1,
-            ).stdout.strip()
-            if not win:
-                return "ctrl+v"
-            wm_class = subprocess.run(
-                ["xprop", "-id", win, "WM_CLASS"],
-                capture_output=True, text=True, timeout=1,
-            ).stdout.lower()
-        except (FileNotFoundError, OSError, subprocess.SubprocessError):
-            return "ctrl+v"
-        if any(marker in wm_class for marker in _TERMINAL_WM_CLASS_MARKERS):
-            return "ctrl+shift+v"
-        return "ctrl+v"
+        return external_paste.detect_paste_shortcut(_TERMINAL_WM_CLASS_MARKERS)
 
     def _paste_markdown_to_focused_window(self, text: str) -> None:
         self._external_paste_button.setEnabled(True)
         shortcut = self._detect_paste_shortcut()
-        clipboard = QApplication.clipboard()
-        clipboard.setText(text, QClipboard.Mode.Clipboard)
-        if clipboard.supportsSelection():
-            clipboard.setText(text, QClipboard.Mode.Selection)
-        # Deixa o event loop assumir a posse do clipboard antes de disparar o paste.
-        QApplication.processEvents()
-        try:
-            # Popen (NAO-bloqueante) e critico: subprocess.run congelaria o event
-            # loop do Qt e, sem um clipboard manager rodando, o app nao conseguiria
-            # servir o SelectionRequest X11 da janela alvo -> paste vazio. Mantendo
-            # o loop vivo, o Qt responde ao pedido de clipboard durante o paste.
-            proc = subprocess.Popen(
-                ["xdotool", "key", "--clearmodifiers", shortcut],
-            )
-        except FileNotFoundError:
-            self._show_toast_warning("xdotool nao encontrado; markdown copiado para o clipboard.")
-            return
-        # Verificacao diferida de falha (Zero Silencio) sem bloquear o loop.
-        QTimer.singleShot(400, self, lambda p=proc: self._check_paste_result(p))
+        external_paste.paste_text_to_focused_window(
+            text,
+            shortcut,
+            owner=self,
+            on_warning=self._show_toast_warning,
+            # Roteia pela instancia para manter o hook override-avel
+            # (mesmo contrato de _detect_paste_shortcut).
+            on_check=self._check_paste_result,
+        )
 
     def _check_paste_result(self, proc: subprocess.Popen) -> None:
-        code = proc.poll()
-        if code is not None and code != 0:
-            self._show_toast_warning("Falha ao colar; markdown copiado para o clipboard.")
+        external_paste._check_paste_result(proc, self._show_toast_warning)
 
     def _apply_reader_theme(self) -> None:
         editor_font_size = _EDITOR_BASE_FONT_SIZE + self._reader_font_delta

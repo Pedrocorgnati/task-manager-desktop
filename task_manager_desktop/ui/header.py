@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QSize, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -438,6 +439,19 @@ class HeaderBar(QWidget):
         self._btn_tool_forge_pick.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_tool_forge_pick.clicked.connect(self._open_forge_pick_tool)
         tools_layout.addWidget(self._btn_tool_forge_pick)
+        self._btn_tool_forge_outreach = QPushButton(
+            "forge-outreach", self._tools_panel
+        )
+        self._btn_tool_forge_outreach.setObjectName("headerToolEntry")
+        self._btn_tool_forge_outreach.setProperty(
+            "testid", "header-tool-forge-outreach"
+        )
+        self._btn_tool_forge_outreach.setAccessibleName(
+            "Abrir forge-outreach (gerador de prospecção)"
+        )
+        self._btn_tool_forge_outreach.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_tool_forge_outreach.clicked.connect(self._open_forge_outreach_tool)
+        tools_layout.addWidget(self._btn_tool_forge_outreach)
         self._tools_panel.adjustSize()
         self._tools_panel.hide()
 
@@ -631,6 +645,52 @@ class HeaderBar(QWidget):
         except FileNotFoundError:
             return
         self._btn_tools.setChecked(False)
+
+    def _open_forge_outreach_tool(self) -> None:
+        forge_root = _systemforge_root()
+        tool_root = forge_root / "ai-forge" / "forge-outreach"
+        run_py = tool_root / "run.py"
+        if not run_py.is_file():
+            self._show_tool_launch_warning(
+                f"forge-outreach indisponível: {run_py} não encontrado."
+            )
+            return
+        # sys.executable garante o mesmo interpretador (com PySide6) do
+        # task-manager; python3 do PATH pode nao ter as dependencias.
+        python = sys.executable or "python3"
+        try:
+            proc = subprocess.Popen(
+                [python, str(run_py)],
+                cwd=str(tool_root),
+                start_new_session=True,
+            )
+        except (FileNotFoundError, OSError) as exc:
+            self._show_tool_launch_warning(f"Falha ao abrir forge-outreach: {exc}")
+            return
+        # Zero Silencio: morte precoce do filho (ImportError, crash de boot)
+        # vira aviso visivel em vez de clique mudo.
+        QTimer.singleShot(
+            1500, self, lambda p=proc: self._check_tool_launch(p, "forge-outreach")
+        )
+        self._btn_tools.setChecked(False)
+
+    def _check_tool_launch(self, proc: subprocess.Popen, name: str) -> None:
+        code = proc.poll()
+        if code is not None and code != 0:
+            self._show_tool_launch_warning(
+                f"{name} terminou com erro ao iniciar (exit {code})."
+            )
+
+    def _show_tool_launch_warning(self, message: str) -> None:
+        try:
+            from task_manager_desktop.ui.toast import ToastWidget
+
+            top = self.window()
+            if isinstance(top, QWidget):
+                toast = ToastWidget(top)
+                toast.show_message(message)
+        except Exception:  # noqa: BLE001
+            pass
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         super().resizeEvent(event)
