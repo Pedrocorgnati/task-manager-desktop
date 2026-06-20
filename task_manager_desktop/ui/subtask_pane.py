@@ -4,7 +4,7 @@ import logging
 import random
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING
 
 from PySide6.QtCore import (
@@ -1367,6 +1367,7 @@ class ClockPane(SubtaskPane):
         card.clicked.connect(self._edit_timer)
         card.pause_toggled.connect(self._toggle_pause_timer)
         card.delete_requested.connect(self._delete_timer)
+        card.restart_requested.connect(self._restart_timer_one_hour)
 
         card_layout = QVBoxLayout(card.content)
         card_layout.setContentsMargins(10, 3, 10, 3)
@@ -1383,7 +1384,9 @@ class ClockPane(SubtaskPane):
         )
         card.pause_btn.setText("▶" if timer.paused and not done else "⏸")
         card.pause_btn.setEnabled(not done)
+        card.pause_btn.setVisible(not done)
         card.delete_btn.setVisible(done)
+        card.plus_one_btn.setVisible(done)
         card_layout.addWidget(title)
         card_layout.addWidget(time_label)
         self._list.setItemWidget(item, card)
@@ -1877,6 +1880,25 @@ class ClockPane(SubtaskPane):
         self._repo.delete_clock_timer(timer_id)
         self.refresh()
 
+    def _restart_timer_one_hour(self, timer_id: str) -> None:
+        if self._repo is None:
+            return
+        timers = {t.id: t for t in self._repo.list_clock_timers(self._kind)}
+        timer = timers.get(timer_id)
+        # Só reinicia temporizadores já finalizados (botão +1 só aparece no done).
+        if timer is None or self._remaining_seconds(timer) > 0:
+            return
+        one_hour = 3600
+        ends_at = (datetime.now(timezone.utc) + timedelta(seconds=one_hour)).isoformat()
+        timer.duration_seconds = one_hour
+        timer.remaining_seconds = one_hour
+        timer.ends_at = ends_at
+        timer.state = "running"
+        timer.paused = False
+        timer.paused_at = None
+        self._repo.update_clock_timer(timer)
+        self.refresh()
+
     def set_collapsed(self, collapsed: bool) -> None:
         self._collapsed = collapsed
         self.btn_toggle.setText("[>]" if collapsed else "[<]")
@@ -1958,6 +1980,7 @@ class _ClockTimerCard(QFrame):
     clicked = Signal(str)
     pause_toggled = Signal(str)
     delete_requested = Signal(str)
+    restart_requested = Signal(str)
 
     def __init__(
         self,
@@ -1993,8 +2016,26 @@ class _ClockTimerCard(QFrame):
         self.pause_btn.setFixedSize(26, 26)
         self.pause_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.pause_btn.clicked.connect(lambda: self.pause_toggled.emit(self._timer_id))
+        self.plus_one_btn = QToolButton(self)
+        self.plus_one_btn.setObjectName("clockPlusOneBtn")
+        self.plus_one_btn.setProperty("testid", f"{testid_prefix}-card-plus-one-{timer_id}")
+        self.plus_one_btn.setAccessibleName("Reiniciar com 1 hora")
+        self.plus_one_btn.setToolTip("Iniciar nova contagem de 1 hora")
+        self.plus_one_btn.setText("+1")
+        self.plus_one_btn.setFixedSize(34, 26)
+        self.plus_one_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.plus_one_btn.setStyleSheet(
+            "QToolButton#clockPlusOneBtn {"
+            "background: #052E16; color: #BBF7D0;"
+            "border: 1px solid #166534; border-radius: 7px;"
+            "font-size: 12px; font-weight: 900; }"
+            "QToolButton#clockPlusOneBtn:hover {"
+            "background: #166534; color: #F0FDF4; }"
+        )
+        self.plus_one_btn.clicked.connect(lambda: self.restart_requested.emit(self._timer_id))
         controls.addWidget(self.delete_btn, 0, Qt.AlignmentFlag.AlignRight)
         controls.addStretch(1)
+        controls.addWidget(self.plus_one_btn, 0, Qt.AlignmentFlag.AlignRight)
         controls.addWidget(self.pause_btn, 0, Qt.AlignmentFlag.AlignRight)
         root.addLayout(controls)
 
@@ -2082,6 +2123,13 @@ class SubtaskClockPane(QWidget):
         layout.addWidget(self._divider, 0)
         layout.addWidget(self.timers_section, 45)
 
+        # Trava a largura do container (coluna 2) no mesmo limite das panes
+        # internas. Sem isto o QSplitter estica o container proporcionalmente a
+        # janela (_apply_splitter_ratios usa total_w * ratio) e a coluna 2 cresce
+        # alem de _EXPANDED_WIDTH conforme a janela aumenta.
+        self.setMinimumWidth(_EXPANDED_WIDTH)
+        self.setMaximumWidth(_EXPANDED_WIDTH)
+
     def collapsed_width(self) -> int:
         return self.subtask_pane.collapsed_width()
 
@@ -2090,6 +2138,11 @@ class SubtaskClockPane(QWidget):
         self.daily_clock_pane.set_collapsed(collapsed)
         self.clock_pane.set_collapsed(collapsed)
         self.timers_section.setVisible(not collapsed)
+        # Mantem a largura da coluna 2 travada no limite (colapsada ou nao),
+        # independente da largura da janela.
+        target_width = self.collapsed_width() if collapsed else _EXPANDED_WIDTH
+        self.setMinimumWidth(target_width)
+        self.setMaximumWidth(target_width)
         self.updateGeometry()
 
     def set_task(self, task: Task | None) -> None:
