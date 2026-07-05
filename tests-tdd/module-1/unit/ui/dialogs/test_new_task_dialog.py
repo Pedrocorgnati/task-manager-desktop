@@ -45,10 +45,12 @@ def test_enter_on_title_triggers_ok_esc_triggers_cancel(qtbot):
     """Atalhos: Enter no titulo dispara OK; Esc aciona Cancelar."""
     from task_manager_desktop.ui.dialogs.new_task_dialog import NewTaskDialog
 
-    # Enter with valid title → accept
+    # Enter with valid title → accept. workspace_root e obrigatorio (v11),
+    # entao precisa estar preenchido para o form validar e aceitar.
     dlg = NewTaskDialog()
     qtbot.addWidget(dlg)
     qtbot.keyClicks(dlg.title_edit, "Valid title")
+    dlg.form.workspace_root_input.setText("output/workspace/valid-title")
     qtbot.keyPress(dlg.title_edit, Qt.Key_Return)
     assert dlg.result() == dlg.DialogCode.Accepted
 

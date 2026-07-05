@@ -87,10 +87,20 @@ class EditTaskController(QObject):
         }
         if "favorito" in data:
             update_fields["favorito"] = coerce_flag(data["favorito"], "favorito")
+        if "coin_favorite" in data:
+            update_fields["coin_favorite"] = coerce_flag(
+                data["coin_favorite"], "coin_favorite"
+            )
+        if "dot_favorite" in data:
+            update_fields["dot_favorite"] = coerce_flag(
+                data["dot_favorite"], "dot_favorite"
+            )
         if "permanente" in data:
             update_fields["permanente"] = coerce_flag(data["permanente"], "permanente")
         if "status" in data:
             update_fields["status"] = resolve_status(data["status"])
+        if "workspace_root" in data:
+            update_fields["workspace_root"] = data["workspace_root"]
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         try:
@@ -173,55 +183,108 @@ class EditTaskController(QObject):
         flag favorito). Em falha, mostra toast e retorna False para o card
         reverter visualmente — nunca falha silenciosa (source.md rejeicao #10).
 
-        Garantia de callback (source.md secao 3.6 / AC-14): este metodo NUNCA
-        propaga excecao para o caller. O TaskCard usa o valor de retorno (bool)
-        para destravar a estrela (`if ok: ... else: _rollback_star()`); uma
-        excecao escapando deixaria o lockout da estrela travado para sempre. O
-        bloco try/except/finally garante que um bool sempre seja retornado,
-        mesmo diante de erro inesperado.
+        Ver `_persist_flag_toggle` para a garantia de callback (nunca propaga
+        excecao) e a observabilidade estruturada. A latencia mede o persist
+        (`repo.update_favorito`).
+        """
+        return self._persist_flag_toggle(
+            task,
+            value,
+            update_fn=self._repo.update_favorito,
+            from_value=task.favorito,
+            event_name="favorito.toggle",
+            error_message="Não foi possível salvar o favorito. Tente novamente.",
+        )
 
-        Observabilidade (source.md secao 9): emite UM evento `favorito.toggle`
-        estruturado com `task_id`, `from`, `to`, `latency_ms`, `outcome`
-        (`ok|error`) — o mesmo payload canonico no caminho de sucesso e de erro.
-        A latencia mede o persist (`repo.update_favorito`).
+    def handle_coin_toggle(self, task: Task, value: bool) -> bool:
+        """Persiste o destaque de moeda. Irmao de handle_favorite_toggle.
+
+        Autosave debounced da moeda do TaskCard; mesmo contrato (callback nunca
+        propaga excecao, refresh em sucesso, rollback via retorno em falha).
+        Emite o evento estruturado `coin.toggle`.
+        """
+        return self._persist_flag_toggle(
+            task,
+            value,
+            update_fn=self._repo.update_coin_favorite,
+            from_value=task.coin_favorite,
+            event_name="coin.toggle",
+            error_message="Não foi possível salvar o destaque. Tente novamente.",
+        )
+
+    def handle_dot_toggle(self, task: Task, value: bool) -> bool:
+        """Persiste o marcador de bolinha. Irmao de handle_favorite_toggle.
+
+        Autosave debounced da bolinha do TaskCard; mesmo contrato. Emite o
+        evento estruturado `dot.toggle`.
+        """
+        return self._persist_flag_toggle(
+            task,
+            value,
+            update_fn=self._repo.update_dot_favorite,
+            from_value=task.dot_favorite,
+            event_name="dot.toggle",
+            error_message="Não foi possível salvar o marcador. Tente novamente.",
+        )
+
+    def _persist_flag_toggle(
+        self,
+        task: Task,
+        value: bool,
+        *,
+        update_fn,
+        from_value: bool,
+        event_name: str,
+        error_message: str,
+    ) -> bool:
+        """Nucleo compartilhado do autosave debounced de um flag booleano do card.
+
+        Garantia de callback (source.md secao 3.6 / AC-14): NUNCA propaga
+        excecao para o caller. O TaskCard usa o valor de retorno (bool) para
+        destravar o botao (`if ok: ... else: _rollback_*()`); uma excecao
+        escapando deixaria o lockout travado para sempre. O try/except/finally
+        garante que um bool sempre seja retornado, mesmo diante de erro
+        inesperado.
+
+        Observabilidade (source.md secao 9): emite UM evento estruturado
+        `{event_name}` com `task_id`, `from`, `to`, `latency_ms`, `outcome`
+        (`ok|error`) — o mesmo payload canonico no sucesso e no erro. A latencia
+        mede o persist (`update_fn`).
         """
         from PySide6.QtWidgets import QWidget
 
         parent_widget = (
             self._main_window if isinstance(self._main_window, QWidget) else None
         )
-        from_value = task.favorito
         start = time.perf_counter()
         outcome = "error"
         try:
             try:
-                self._repo.update_favorito(task.id, value)
+                update_fn(task.id, value)
             except (TaskNotFoundError, sqlite3.Error) as exc:
                 # Erro esperado de I/O / rowcount: toast + rollback via retorno.
                 _LOG.warning(
-                    "favorito.toggle falhou para task %s: %s",
+                    "%s falhou para task %s: %s",
+                    event_name,
                     task.id,
                     exc,
                     extra={"task_id": task.id},
                 )
                 if parent_widget is not None:
-                    ToastWidget(parent_widget).show_message(
-                        "Não foi possível salvar o favorito. Tente novamente."
-                    )
+                    ToastWidget(parent_widget).show_message(error_message)
                 return False
             except Exception:
                 # Erro inesperado: nunca engolir — logar com task_id e devolver
-                # False para o card destravar a estrela (autosave callback
+                # False para o card destravar o botao (autosave callback
                 # guarantee, source.md AC-14).
                 _LOG.exception(
-                    "favorito.toggle erro inesperado para task %s",
+                    "%s erro inesperado para task %s",
+                    event_name,
                     task.id,
                     extra={"task_id": task.id},
                 )
                 if parent_widget is not None:
-                    ToastWidget(parent_widget).show_message(
-                        "Não foi possível salvar o favorito. Tente novamente."
-                    )
+                    ToastWidget(parent_widget).show_message(error_message)
                 return False
             outcome = "ok"
             self._task_list.refresh(self._repo.list_active())
@@ -229,9 +292,9 @@ class EditTaskController(QObject):
         finally:
             latency_ms = round((time.perf_counter() - start) * 1000, 3)
             _LOG.info(
-                "favorito.toggle",
+                event_name,
                 extra={
-                    "event": "favorito.toggle",
+                    "event": event_name,
                     "task_id": task.id,
                     "from": from_value,
                     "to": value,

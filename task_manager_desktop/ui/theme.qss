@@ -786,19 +786,22 @@ QPlainTextEdit#subtaskNotesEditor {
     selection-color: #111116;
 }
 
+/* Estado nao selecionado (state 0): tom intermediario de cinza preenchido. */
 QCheckBox#subtaskCheckbox::indicator {
     width: 14px;
     height: 14px;
     border-radius: 4px;
-    border: 1px solid #71717A;
-    background: #111116;
+    border: 1px solid #A1A1AA;
+    background: #71717A;
 }
 
+/* Subtask finalizada (state 2, nome riscado): preenchido preto. */
 QCheckBox#subtaskCheckbox::indicator:checked {
-    background: #111116;
+    background: #000000;
     border-color: #3F3F46;
 }
 
+/* Estado intermediario (state 1): verde (inalterado). */
 QCheckBox#subtaskCheckbox::indicator:indeterminate {
     background: #22C55E;
     border-color: #86EFAC;

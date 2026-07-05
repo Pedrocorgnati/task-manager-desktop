@@ -122,6 +122,16 @@ PENCIL_WHITE_SVG = (
     "</svg>"
 )
 
+# Seta de "play" usada no botao de colar workspace root do card (mesma
+# identidade branca translucida do lapis/lixeira ao lado).
+PLAY_ARROW_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+    '<path d="M7 5l11 7-11 7V5Z" '
+    'fill="#F8FAFC" opacity="0.16" stroke="#F8FAFC" stroke-width="1.8" '
+    'stroke-linejoin="round"/>'
+    "</svg>"
+)
+
 PLUS_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
     f' stroke="{_P["COLOR_PRIMARY"]}" stroke-width="2"'
@@ -183,6 +193,22 @@ COIN_OUTLINE_SVG = (
     '<circle cx="12" cy="12" r="8.2"/>'
     '<path d="M9.3 9.1h5.2a1.9 1.9 0 0 1 0 3.8H10.2a1.9 1.9 0 0 0 0 3.8h4.9"/>'
     '<path d="M12 7.6v8.8"/>'
+    "</svg>"
+)
+
+# Bolinha simples de favorito no card — terceiro marcador de ranqueamento, na
+# primeira posicao (antes da estrela e da moeda). Variante preenchida (favorito,
+# azul) e contorno (nao favorito, cinza), espelhando STAR_*/COIN_*.
+DOT_FILLED_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">'
+    '<circle cx="12" cy="12" r="6.4" fill="#60A5FA" stroke="#2563EB" stroke-width="1.7"/>'
+    "</svg>"
+)
+
+DOT_OUTLINE_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"'
+    ' stroke="#A1A1AA" stroke-width="1.7">'
+    '<circle cx="12" cy="12" r="6.4"/>'
     "</svg>"
 )
 
@@ -342,13 +368,13 @@ def type_icon_svg(task_type) -> str:
     return mapping.get(task_type, ROBOT_SVG)
 
 
-def svg_to_icon(svg: str, size: int = 20):
+def svg_to_icon(svg: str, size: int = 20, opacity: float = 1.0):
     from PySide6.QtGui import QIcon
 
-    return QIcon(svg_to_pixmap(svg, size))
+    return QIcon(svg_to_pixmap(svg, size, opacity))
 
 
-def svg_to_pixmap(svg: str, size: int = 20):
+def svg_to_pixmap(svg: str, size: int = 20, opacity: float = 1.0):
     from PySide6.QtCore import QByteArray, QSize
     from PySide6.QtGui import QPainter, QPixmap
     from PySide6.QtSvg import QSvgRenderer
@@ -357,6 +383,11 @@ def svg_to_pixmap(svg: str, size: int = 20):
     pixmap = QPixmap(QSize(size, size))
     pixmap.fill(Qt_transparent())
     painter = QPainter(pixmap)
+    # `opacity` < 1.0 esmaece o glifo sem recorrer a um QGraphicsEffect no
+    # widget. Efeitos aninhados (card com drop-shadow + filho com opacity
+    # effect) quebram a renderizacao do filho no Qt; baked-in alpha evita isso.
+    if opacity < 1.0:
+        painter.setOpacity(opacity)
     renderer.render(painter)
     painter.end()
     return pixmap

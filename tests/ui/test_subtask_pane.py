@@ -227,7 +227,7 @@ def test_subtask_title_renders_in_body_before_cards(qtbot, repo):
     pane.set_task(task)
 
     assert pane._body_title.property("testid") == "subtask-pane-title"
-    assert pane._body_title.text() == "Subtasks #a"
+    assert pane._body_title.text() == "Subtasks A"
     assert pane._layout.indexOf(pane._body_title) < pane._layout.indexOf(pane._list)
     assert pane._header_layout.indexOf(pane._body_title) == -1
 

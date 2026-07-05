@@ -41,6 +41,8 @@ def test_task_repository_facade_exposes_nine_public_methods():
         "update_favorito",     # added in loop 05-20 TASK-008 (favorito/permanente)
         "update_permanente",   # added in loop 05-20 TASK-008 (favorito/permanente)
         "update_em_preparacao",  # added with setor manual "Em preparação" (v8)
+        "update_coin_favorite",  # added with persisted coin marker (v12)
+        "update_dot_favorite",   # added with persisted dot marker (v12)
         "list_clock_timers",
         "create_clock_timer",
         "update_clock_timer",

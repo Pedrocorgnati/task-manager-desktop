@@ -323,6 +323,14 @@ def run_migrations(conn: sqlite3.Connection, db_path: Path | None = None) -> Non
     # coluna usada em CHECK). Hardened (backup + transacao atomica), reentrante.
     _apply_migration_v10(conn, db_path)
 
+    # v11: coluna workspace_root + seed das linhas existentes. DDL simples e
+    # reentrante — roda sempre apos a v10.
+    _apply_migration_v11(conn)
+
+    # v12: colunas booleanas coin_favorite + dot_favorite (marcadores de
+    # ranqueamento irmaos de favorito). DDL simples e reentrante — roda apos v11.
+    _apply_migration_v12(conn)
+
 
 # Versao da migracao v8 (coluna em_preparacao). Vive fora de _MIGRATIONS para
 # nao interferir no precheck dual da v7 (que assume max(_schema_version) == 6
@@ -514,6 +522,88 @@ def _apply_migration_v9(conn: sqlite3.Connection) -> None:
     conn.execute(f"PRAGMA user_version = {_V9_VERSION}")
     conn.commit()
     _logger.info("migracao v8->v9: coluna type garantida em subtasks")
+
+
+# Versao da migracao v11 (coluna workspace_root). Vive fora de _MIGRATIONS,
+# como v8/v9/v10, para nao interferir no precheck dual da v7. Aplicada apos v10.
+_V11_VERSION = 11
+
+
+def _apply_migration_v11(conn: sqlite3.Connection) -> None:
+    """Migracao v10 -> v11: adiciona `workspace_root` a tasks + seed.
+
+    `workspace_root` e o caminho do workspace do repositorio SystemForge
+    associado a task (campo obrigatorio no formulario). Coluna TEXT NOT NULL
+    DEFAULT '' -> linhas existentes recebem '' e, em seguida, as que ficarem
+    vazias sao semeadas com 'output/workspace/{slug-do-titulo}' (ex.: a task
+    'Lead Hunting Engine' recebe 'output/workspace/lead-hunting-engine').
+    Idempotente e reentrante: nao reaplica se a versao 11 ja consta, e so emite
+    o ALTER se a coluna ainda nao existe (banco divergente).
+    """
+    from task_manager_desktop.core.models import default_workspace_root
+
+    applied = {row[0] for row in conn.execute("SELECT version FROM _schema_version")}
+    if _V11_VERSION in applied:
+        return
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+    if "workspace_root" not in existing_cols:
+        conn.execute(
+            "ALTER TABLE tasks ADD COLUMN workspace_root TEXT NOT NULL DEFAULT ''"
+        )
+    # Seed deterministico: o slug nao e expressavel em SQL puro, entao computamos
+    # em Python e atualizamos linha a linha as que estao sem workspace_root.
+    rows = conn.execute(
+        "SELECT id, title FROM tasks WHERE workspace_root IS NULL OR workspace_root = ''"
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE tasks SET workspace_root = ? WHERE id = ?",
+            (default_workspace_root(row[1] or ""), row[0]),
+        )
+    conn.execute("INSERT INTO _schema_version (version) VALUES (?)", (_V11_VERSION,))
+    conn.execute(f"PRAGMA user_version = {_V11_VERSION}")
+    conn.commit()
+    _logger.info(
+        "migracao v10->v11: coluna workspace_root garantida + seed em %d linhas",
+        len(rows),
+    )
+
+
+# Versao da migracao v12 (colunas coin_favorite + dot_favorite). Vive fora de
+# _MIGRATIONS, como v8..v11, para nao interferir no precheck dual da v7.
+_V12_VERSION = 12
+
+# Colunas booleanas da v12: mesmo contrato de favorito/permanente/em_preparacao
+# (INTEGER NOT NULL DEFAULT 0 + CHECK IN (0,1) -> linhas existentes recebem 0).
+_V12_COLUMNS: tuple[str, ...] = ("coin_favorite", "dot_favorite")
+
+
+def _apply_migration_v12(conn: sqlite3.Connection) -> None:
+    """Migracao v11 -> v12: adiciona coin_favorite e dot_favorite a tasks.
+
+    Sao marcadores de ranqueamento irmaos de `favorito` (a moeda e a bolinha do
+    card), agora persistidos em vez de viverem apenas em memoria. Idempotente e
+    reentrante: nao reaplica se a versao 12 ja consta em _schema_version, e so
+    emite cada ALTER se a coluna ainda nao existe (banco divergente). INTEGER
+    NOT NULL DEFAULT 0 -> linhas existentes recebem 0; o CHECK blinda contra
+    valores fora do dominio booleano.
+    """
+    applied = {row[0] for row in conn.execute("SELECT version FROM _schema_version")}
+    if _V12_VERSION in applied:
+        return
+    existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(tasks)")}
+    for column in _V12_COLUMNS:
+        if column not in existing_cols:
+            conn.execute(
+                f"ALTER TABLE tasks ADD COLUMN {column} INTEGER NOT NULL "
+                f"DEFAULT 0 CHECK ({column} IN (0, 1))"
+            )
+    conn.execute("INSERT INTO _schema_version (version) VALUES (?)", (_V12_VERSION,))
+    conn.execute(f"PRAGMA user_version = {_V12_VERSION}")
+    conn.commit()
+    _logger.info(
+        "migracao v11->v12: colunas coin_favorite + dot_favorite garantidas em tasks"
+    )
 
 
 def _backup_before_v7(conn: sqlite3.Connection, db_path: Path | None) -> Path | None:

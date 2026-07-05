@@ -17,6 +17,10 @@ def test_schema_v1_creates_tasks_table(in_memory_db):
         # v8: flag manual do setor "Em preparação"
         "em_preparacao",
         # v10 removeu a coluna `type` (o tipo migrou para as subtasks).
+        # v11: workspace_root do repositorio SystemForge da task.
+        "workspace_root",
+        # v12: marcadores de ranqueamento persistidos (moeda + bolinha).
+        "coin_favorite", "dot_favorite",
     }
     assert expected == columns
 
@@ -42,8 +46,8 @@ def test_migration_is_idempotent(in_memory_db):
     run_migrations(in_memory_db)
     run_migrations(in_memory_db)
     count = in_memory_db.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-    # v10: drop da coluna `type` de tasks (o tipo vive nas subtasks).
-    assert count == 10
+    # v12: colunas coin_favorite + dot_favorite (ultima migracao aplicada).
+    assert count == 12
 
 
 def test_migration_v3_converts_legacy_online_offline_values(in_memory_db):

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 
@@ -49,6 +51,29 @@ def parse_deps(s: str) -> list[str]:
     return [p.strip() for p in s.split(",") if p.strip()]
 
 
+def slugify(text: str) -> str:
+    """Converte um titulo em slug com hifens.
+
+    'Lead Hunting Engine' -> 'lead-hunting-engine'. Remove acentos, baixa a
+    caixa e troca qualquer sequencia de caracteres nao alfanumericos por um
+    unico hifen, sem hifens nas pontas. Retorna 'task' quando o titulo nao
+    produz nenhum caractere util (ex.: so simbolos).
+    """
+    normalized = unicodedata.normalize("NFKD", text)
+    ascii_text = normalized.encode("ascii", "ignore").decode("ascii").lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_text).strip("-")
+    return slug or "task"
+
+
+def default_workspace_root(title: str) -> str:
+    """Caminho-semente do workspace SystemForge a partir do titulo da task.
+
+    Padrao 'output/workspace/{titulo-com-hifen}' usado no seed das tasks
+    existentes (migracao v11) e como sugestao no formulario de criacao.
+    """
+    return f"output/workspace/{slugify(title)}"
+
+
 @dataclass
 class Task:
     id: str
@@ -65,10 +90,20 @@ class Task:
     hidden_at: str | None = None
     favorito: bool = False
     permanente: bool = False
+    # Marcadores de ranqueamento extras (migration v12), irmãos de `favorito`:
+    # cada um soma +1 no score de ordenacao do setor (ver sort_sector_tasks).
+    # `coin_favorite` e a moeda; `dot_favorite` e a bolinha. Persistidos como
+    # colunas booleanas em `tasks`, exatamente como `favorito`.
+    coin_favorite: bool = False
+    dot_favorite: bool = False
     # Flag manual do setor "Em preparação" (migration v8). Quando True a task e
     # retida nesse setor independentemente de pending/in_progress; qualquer
     # mudanca de status pelos botoes do card zera a flag.
     em_preparacao: bool = False
+    # Caminho do workspace do repositorio SystemForge associado a esta task
+    # (migration v11). Campo obrigatorio no formulario; o botao de play do card
+    # cola este valor na janela focada.
+    workspace_root: str = ""
 
 
 @dataclass
@@ -113,5 +148,7 @@ __all__ = [
     "Subtask",
     "Task",
     "TaskType",
+    "default_workspace_root",
     "parse_deps",
+    "slugify",
 ]

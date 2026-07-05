@@ -15,6 +15,7 @@ def sample_task():
         title="X",
         status=Status.PENDING,
         deps=["a1b", "c2d"],
+        workspace_root="output/workspace/x",
     )
 
 

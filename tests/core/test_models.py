@@ -48,8 +48,9 @@ class TestEnums:
 
 class TestTaskDataclass:
     def test_has_12_fields(self):
-        # 11 campos + em_preparacao (flag do setor manual "Em preparação").
-        assert len(fields(Task)) == 12
+        # 13 campos + coin_favorite/dot_favorite (marcadores de ranqueamento
+        # persistidos, migration v12).
+        assert len(fields(Task)) == 15
 
     def test_defaults_are_sane(self):
         t = Task(id="abc", title="x")

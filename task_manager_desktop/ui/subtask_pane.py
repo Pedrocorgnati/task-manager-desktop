@@ -1066,7 +1066,7 @@ class SubtaskPane(QWidget):
         if self._show_all:
             self._body_title.setText("Subtasks: In Progress")
         else:
-            self._body_title.setText("Subtasks" if self._task is None else f"Subtasks #{self._task.id}")
+            self._body_title.setText("Subtasks" if self._task is None else f"Subtasks {self._task.title}")
 
     def _add_subtask(self) -> None:
         if self._task is None or self._repo is None:

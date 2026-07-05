@@ -83,6 +83,8 @@ class CreateTaskController(QObject):
         # Valor invalido levanta ValueError aqui, sem fallback silencioso.
         favorito = coerce_flag(data.get("favorito", False), "favorito")
         permanente = coerce_flag(data.get("permanente", False), "permanente")
+        coin_favorite = coerce_flag(data.get("coin_favorite", False), "coin_favorite")
+        dot_favorite = coerce_flag(data.get("dot_favorite", False), "dot_favorite")
         em_preparacao = coerce_flag(data.get("em_preparacao", False), "em_preparacao")
         status = resolve_status(data.get("status"))
 
@@ -104,7 +106,10 @@ class CreateTaskController(QObject):
             order_index=max((t.order_index for t in all_tasks), default=0) + 1,
             favorito=favorito,
             permanente=permanente,
+            coin_favorite=coin_favorite,
+            dot_favorite=dot_favorite,
             em_preparacao=em_preparacao,
+            workspace_root=data.get("workspace_root", ""),
         )
 
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
@@ -136,9 +141,6 @@ class CreateTaskController(QObject):
             return False
         finally:
             QApplication.restoreOverrideCursor()
-
-        if data.get("coin_favorite"):
-            self._task_list.set_coin_favorite(task.id, True)
 
         if cycle_desc and parent_widget:
             toast = ToastWidget(parent_widget)

@@ -251,8 +251,27 @@ def _row_to_task(row: sqlite3.Row) -> Task:
         hidden_at=row["hidden_at"],
         favorito=_normalize_flag(row["favorito"], "favorito", task_id),
         permanente=_normalize_flag(row["permanente"], "permanente", task_id),
+        # coin_favorite/dot_favorite chegaram na migration v12; bancos lidos
+        # antes dela (ou rows sem a coluna por divergencia) caem em False.
+        coin_favorite=(
+            _normalize_flag(row["coin_favorite"], "coin_favorite", task_id)
+            if "coin_favorite" in row.keys()
+            else False
+        ),
+        dot_favorite=(
+            _normalize_flag(row["dot_favorite"], "dot_favorite", task_id)
+            if "dot_favorite" in row.keys()
+            else False
+        ),
         em_preparacao=_normalize_flag(
             row["em_preparacao"], "em_preparacao", task_id
+        ),
+        # workspace_root chegou na migration v11; bancos lidos antes dela (ou
+        # rows sem a coluna por divergencia) caem no default vazio.
+        workspace_root=(
+            (row["workspace_root"] or "")
+            if "workspace_root" in row.keys()
+            else ""
         ),
     )
 
@@ -386,8 +405,9 @@ class TaskRepository:
             """
             INSERT INTO tasks
                 (id, title, status, deps, notes, order_index, created_at,
-                 favorito, permanente, em_preparacao)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 favorito, permanente, coin_favorite, dot_favorite,
+                 em_preparacao, workspace_root)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 task.id,
@@ -399,7 +419,10 @@ class TaskRepository:
                 task.created_at or datetime.now(timezone.utc).isoformat(),
                 _flag_to_int(task.favorito, "favorito"),
                 _flag_to_int(task.permanente, "permanente"),
+                _flag_to_int(task.coin_favorite, "coin_favorite"),
+                _flag_to_int(task.dot_favorite, "dot_favorite"),
                 _flag_to_int(task.em_preparacao, "em_preparacao"),
+                task.workspace_root or "",
             ),
         )
         self._conn.commit()
@@ -422,7 +445,10 @@ class TaskRepository:
             "completed_at",
             "favorito",
             "permanente",
+            "coin_favorite",
+            "dot_favorite",
             "em_preparacao",
+            "workspace_root",
         }
         col_map: dict[str, object] = {}
         for key, val in fields.items():
@@ -432,7 +458,13 @@ class TaskRepository:
                 col_map["deps"] = ",".join(val)
             elif key == "status" and isinstance(val, Status):
                 col_map["status"] = val.value
-            elif key in ("favorito", "permanente", "em_preparacao"):
+            elif key in (
+                "favorito",
+                "permanente",
+                "coin_favorite",
+                "dot_favorite",
+                "em_preparacao",
+            ):
                 col_map[key] = _flag_to_int(val, key)
             elif key == "order_index":
                 col_map[key] = _validate_order_index(val)
@@ -541,6 +573,20 @@ class TaskRepository:
         em_preparacao nunca afeta `hidden_at`.
         """
         self._update_flag(task_id, "em_preparacao", value)
+
+    def update_coin_favorite(self, task_id: str, value: bool) -> None:
+        """Marca/desmarca o destaque de moeda. Ver _update_flag para contratos.
+
+        Irmão de `favorito` no ranqueamento; nunca afeta `hidden_at`.
+        """
+        self._update_flag(task_id, "coin_favorite", value)
+
+    def update_dot_favorite(self, task_id: str, value: bool) -> None:
+        """Marca/desmarca o marcador de bolinha. Ver _update_flag para contratos.
+
+        Irmão de `favorito` no ranqueamento; nunca afeta `hidden_at`.
+        """
+        self._update_flag(task_id, "dot_favorite", value)
 
     def schedule_permanent_task(self, task_id: str, due_at: str) -> None:
         """Agenda uma task permanente para voltar a IN_PROGRESS em ``due_at``.

@@ -112,9 +112,9 @@ def test_v7_bumps_schema_version(tmp_path):
     conn.close()
 
     assert 7 in versions
-    # run_migrations tambem aplica v8 (em_preparacao), v9 (type em subtasks) e v10
-    # (drop de tasks.type) logo apos a v7.
-    assert versions == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+    # run_migrations tambem aplica v8 (em_preparacao), v9 (type em subtasks), v10
+    # (drop de tasks.type), v11 (workspace_root) e v12 (coin/dot) logo apos a v7.
+    assert versions == {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 
 
 def test_v7_bumps_pragma_user_version(tmp_path):
@@ -134,9 +134,10 @@ def test_v7_bumps_pragma_user_version(tmp_path):
     versions = {row[0] for row in conn.execute("SELECT version FROM _schema_version")}
     conn.close()
 
-    # run_migrations encadeia a v8/v9/v10 apos a v7, entao o contador nativo
-    # termina em 10; o essencial aqui e que o bump aconteceu (>= 7) e que a v7 consta.
-    assert user_version == 10, f"PRAGMA user_version deveria ser 10, retornou {user_version}"
+    # run_migrations encadeia a v8/v9/v10/v11/v12 apos a v7, entao o contador
+    # nativo termina em 12; o essencial aqui e que o bump aconteceu (>= 7) e que
+    # a v7 consta.
+    assert user_version == 12, f"PRAGMA user_version deveria ser 12, retornou {user_version}"
     assert 7 in versions
 
 
@@ -151,7 +152,7 @@ def test_v7_is_idempotent(tmp_path):
     count = conn.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
     conn.close()
 
-    assert count == 10
+    assert count == 12
     backups = list(tmp_path.glob("tasks.db.bak-v6-*"))
     assert len(backups) == 1, "segunda execucao nao deve gerar novo backup"
 
@@ -344,8 +345,8 @@ def test_v7_legitimate_pre_v7_db_has_user_version_zero(tmp_path):
     run_migrations(conn, db_path)  # nao deve levantar
     user_version = conn.execute("PRAGMA user_version").fetchone()[0]
     conn.close()
-    # run_migrations encadeia a v8/v9/v10, entao o contador termina em 10.
-    assert user_version == 10
+    # run_migrations encadeia a v8/v9/v10/v11/v12, entao o contador termina em 12.
+    assert user_version == 12
 
 
 def test_v7_aborts_on_pre_migration_corruption(tmp_path):

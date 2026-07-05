@@ -272,10 +272,6 @@ def main() -> None:
     delete_ctrl = DeleteTaskController(repo, task_list, window, parent=window)
     create_ctrl = CreateTaskController(repo, task_list, window, parent=window)
 
-    def _on_coin_toggle(task, value):
-        task_list.set_coin_favorite(task.id, bool(value))
-        return edit_ctrl.handle_favorite_toggle(task, value)
-
     _PT_MONTHS = {
         1: "jan", 2: "fev", 3: "mar", 4: "abr", 5: "mai", 6: "jun",
         7: "jul", 8: "ago", 9: "set", 10: "out", 11: "nov", 12: "dez",
@@ -542,8 +538,8 @@ def main() -> None:
         "on_delete": delete_ctrl.handle,
         "on_title_save": edit_ctrl.handle_inline_title_edit,
         "on_favorite_toggle": edit_ctrl.handle_favorite_toggle,
-        "on_coin_toggle": _on_coin_toggle,
-        "is_coin_favorite": task_list.is_coin_favorite,
+        "on_coin_toggle": edit_ctrl.handle_coin_toggle,
+        "on_dot_toggle": edit_ctrl.handle_dot_toggle,
         "on_schedule_permanent": _on_schedule_permanent,
     }
     task_list.set_callbacks(callbacks)

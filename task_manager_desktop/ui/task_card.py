@@ -17,7 +17,6 @@ from PySide6.QtGui import QColor, QFontMetrics
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
-    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -35,7 +34,10 @@ from task_manager_desktop.ui.icons import (
     CLOCK_SVG,
     COIN_FILLED_SVG,
     COIN_OUTLINE_SVG,
+    DOT_FILLED_SVG,
+    DOT_OUTLINE_SVG,
     PENCIL_WHITE_SVG,
+    PLAY_ARROW_SVG,
     STAR_FILLED_SVG,
     STAR_OUTLINE_SVG,
     STRATEGY_SVG,
@@ -159,9 +161,7 @@ class TaskCard(QFrame):
         self._fav_watchdog.setSingleShot(True)
         self._fav_watchdog.setInterval(_STAR_IN_FLIGHT_WATCHDOG_MS)
         self._fav_watchdog.timeout.connect(self._on_favorite_watchdog_fired)
-        self._coin_pending_value = bool(
-            self._callbacks.get("is_coin_favorite", lambda _tid: False)(task.id)
-        )
+        self._coin_pending_value = bool(task.coin_favorite)
         self._coin_syncing = False
         self._coin_in_flight = False
         self._coin_debounce = QTimer(self)
@@ -172,6 +172,19 @@ class TaskCard(QFrame):
         self._coin_watchdog.setSingleShot(True)
         self._coin_watchdog.setInterval(_STAR_IN_FLIGHT_WATCHDOG_MS)
         self._coin_watchdog.timeout.connect(self._on_coin_watchdog_fired)
+        # Bolinha (dot): terceiro marcador de favorito/ranqueamento, na primeira
+        # posicao. Mesma maquinaria debounced/in-flight/watchdog da moeda.
+        self._dot_pending_value = bool(task.dot_favorite)
+        self._dot_syncing = False
+        self._dot_in_flight = False
+        self._dot_debounce = QTimer(self)
+        self._dot_debounce.setSingleShot(True)
+        self._dot_debounce.setInterval(_FAVORITO_DEBOUNCE_MS)
+        self._dot_debounce.timeout.connect(self._on_dot_debounce_fired)
+        self._dot_watchdog = QTimer(self)
+        self._dot_watchdog.setSingleShot(True)
+        self._dot_watchdog.setInterval(_STAR_IN_FLIGHT_WATCHDOG_MS)
+        self._dot_watchdog.timeout.connect(self._on_dot_watchdog_fired)
 
         self.setObjectName("taskCard")
         self.setProperty("testid", f"task-card-{task.id}")
@@ -223,6 +236,17 @@ class TaskCard(QFrame):
         top_row.setContentsMargins(0, 0, 0, 0)
         top_row.setSpacing(5)
 
+        # Cluster dos 3 marcadores de favorito/ranqueamento (bolinha, estrela,
+        # moeda). Vive num container proprio com gap reduzido (2px) para que os
+        # tres fiquem colados entre si, sem encolher o espacamento (5px) do resto
+        # da linha (id, deps, acoes).
+        self._fav_row = QWidget(self._top_row)
+        self._fav_row.setObjectName("taskCardFavRow")
+        fav_row = QHBoxLayout(self._fav_row)
+        fav_row.setContentsMargins(0, 0, 0, 0)
+        fav_row.setSpacing(2)
+        top_row.addWidget(self._fav_row)
+
         # Linha 2 (titulo).
         self._middle_row = QWidget(self._content_col)
         self._middle_row.setObjectName("taskCardMiddleRow")
@@ -233,10 +257,38 @@ class TaskCard(QFrame):
         outer.addWidget(self._top_row, 0)
         outer.addWidget(self._middle_row, 1)
 
-        # Estrela de favorito — primeira posicao da primeira linha. Checkable
-        # com autosave debounced; o estado inicial e aplicado ANTES de conectar
-        # `toggled` para nao disparar autosave so pela renderizacao.
-        self._star_btn = QToolButton(self._top_row)
+        # Bolinha (dot) — primeira posicao dos tres marcadores. Mesmo contrato
+        # checkable/autosave-debounced da estrela e da moeda; o estado inicial e
+        # aplicado ANTES de conectar `toggled` para nao disparar autosave so pela
+        # renderizacao.
+        self._dot_btn = QToolButton(self._fav_row)
+        self._dot_btn.setObjectName("cardFavoriteDot")
+        self._dot_btn.setProperty("testid", f"task-card-{self._task.id}-favorito-bolinha")
+        self._dot_btn.setCheckable(True)
+        self._dot_btn.setChecked(self._dot_pending_value)
+        self._dot_btn.setIconSize(QSize(16, 16))
+        self._dot_btn.setFixedSize(20, 20)
+        self._dot_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._dot_btn.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._dot_btn.setAccessibleName("Marcar bolinha favorita")
+        self._dot_btn.setStyleSheet(
+            "QToolButton#cardFavoriteDot {"
+            "background: transparent; border: none; padding: 0;"
+            "}"
+            "QToolButton#cardFavoriteDot:focus {"
+            "border: 1px solid rgba(255,255,255,0.55); border-radius: 6px;"
+            "}"
+        )
+        self._dot_pending = False
+        self._dot_btn.toggled.connect(self._on_dot_toggled)
+        fav_row.addWidget(self._dot_btn)
+        self._refresh_dot_icon()
+        self._set_dot_pending(False)
+
+        # Estrela de favorito — segunda posicao. Checkable com autosave
+        # debounced; o estado inicial e aplicado ANTES de conectar `toggled`
+        # para nao disparar autosave so pela renderizacao.
+        self._star_btn = QToolButton(self._fav_row)
         self._star_btn.setObjectName("cardFavoriteStar")
         self._star_btn.setProperty("testid", f"task-card-{self._task.id}-favorito")
         self._star_btn.setCheckable(True)
@@ -254,16 +306,17 @@ class TaskCard(QFrame):
             "border: 1px solid rgba(255,255,255,0.55); border-radius: 6px;"
             "}"
         )
-        # Efeito de opacidade reutilizado para sinalizar o estado "pending".
-        self._star_opacity = QGraphicsOpacityEffect(self._star_btn)
-        self._star_opacity.setOpacity(1.0)
-        self._star_btn.setGraphicsEffect(self._star_opacity)
+        # Sinalizacao "pending" via alpha esmaecido no proprio icone (sem
+        # QGraphicsEffect no botao). O card selecionado recebe um
+        # QGraphicsDropShadowEffect e efeitos aninhados quebram a renderizacao
+        # dos filhos no Qt (era a causa do layout dos favoritos "estourar").
+        self._star_pending = False
         self._star_btn.toggled.connect(self._on_star_toggled)
-        top_row.addWidget(self._star_btn)
+        fav_row.addWidget(self._star_btn)
         self._refresh_star_icon()
         self._set_star_pending(False)
 
-        self._coin_btn = QToolButton(self._top_row)
+        self._coin_btn = QToolButton(self._fav_row)
         self._coin_btn.setObjectName("cardFavoriteCoin")
         self._coin_btn.setProperty("testid", f"task-card-{self._task.id}-favorito-moeda")
         self._coin_btn.setCheckable(True)
@@ -281,11 +334,9 @@ class TaskCard(QFrame):
             "border: 1px solid rgba(255,255,255,0.55); border-radius: 6px;"
             "}"
         )
-        self._coin_opacity = QGraphicsOpacityEffect(self._coin_btn)
-        self._coin_opacity.setOpacity(1.0)
-        self._coin_btn.setGraphicsEffect(self._coin_opacity)
+        self._coin_pending = False
         self._coin_btn.toggled.connect(self._on_coin_toggled)
-        top_row.addWidget(self._coin_btn)
+        fav_row.addWidget(self._coin_btn)
         self._refresh_coin_icon()
         self._set_coin_pending(False)
 
@@ -316,6 +367,23 @@ class TaskCard(QFrame):
         actions_layout.setContentsMargins(0, 0, 0, 0)
         actions_layout.setSpacing(4)
         top_row.addWidget(self._actions_row, 0, Qt.AlignmentFlag.AlignRight)
+
+        # Botao "play" (>) — primeira acao da direita, antes do editar. Cola o
+        # workspace_root da task na janela focada 2s depois (mesmo papel do
+        # markdown-external-paste-button).
+        self._paste_btn = QToolButton(self._actions_row)
+        self._paste_btn.setObjectName("cardActionPasteWorkspace")
+        self._paste_btn.setProperty("testid", f"task-card-{self._task.id}-paste-workspace")
+        self._paste_btn.setIcon(svg_to_icon(PLAY_ARROW_SVG, 16))
+        self._paste_btn.setIconSize(QSize(16, 16))
+        self._paste_btn.setFixedSize(22, 22)
+        self._paste_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._paste_btn.setAccessibleName(
+            f"Colar workspace root da task {self._task.id} na janela focada"
+        )
+        self._paste_btn.setToolTip("Colar workspace root na janela focada em 2 segundos")
+        self._paste_btn.clicked.connect(self._handle_paste_workspace_root)
+        actions_layout.addWidget(self._paste_btn)
 
         self._edit_btn = QToolButton(self._actions_row)
         self._edit_btn.setObjectName("cardActionEdit")
@@ -438,12 +506,14 @@ class TaskCard(QFrame):
         """Sincroniza icone e descricao acessivel da estrela com o checked atual."""
         checked = self._star_btn.isChecked()
         svg = STAR_FILLED_SVG if checked else STAR_OUTLINE_SVG
-        self._star_btn.setIcon(svg_to_icon(svg, 16))
+        opacity = _STAR_PENDING_OPACITY if self._star_pending else 1.0
+        self._star_btn.setIcon(svg_to_icon(svg, 16, opacity))
         self._star_btn.setAccessibleDescription("Favorita" if checked else "Não favorita")
 
     def _set_star_pending(self, pending: bool) -> None:
-        """Estado visual do autosave: opacidade reduzida + tooltip enquanto pendente."""
-        self._star_opacity.setOpacity(_STAR_PENDING_OPACITY if pending else 1.0)
+        """Estado visual do autosave: icone esmaecido + tooltip enquanto pendente."""
+        self._star_pending = pending
+        self._refresh_star_icon()
         self._star_btn.setToolTip(
             "Salvando favorito..." if pending else "Favoritar task"
         )
@@ -525,11 +595,13 @@ class TaskCard(QFrame):
     def _refresh_coin_icon(self) -> None:
         checked = self._coin_btn.isChecked()
         svg = COIN_FILLED_SVG if checked else COIN_OUTLINE_SVG
-        self._coin_btn.setIcon(svg_to_icon(svg, 16))
+        opacity = _STAR_PENDING_OPACITY if self._coin_pending else 1.0
+        self._coin_btn.setIcon(svg_to_icon(svg, 16, opacity))
         self._coin_btn.setAccessibleDescription("Moeda favorita" if checked else "Moeda não favorita")
 
     def _set_coin_pending(self, pending: bool) -> None:
-        self._coin_opacity.setOpacity(_STAR_PENDING_OPACITY if pending else 1.0)
+        self._coin_pending = pending
+        self._refresh_coin_icon()
         self._coin_btn.setToolTip("Salvando moeda..." if pending else "Favoritar com moeda")
 
     def _set_coin_in_flight(self, in_flight: bool) -> None:
@@ -573,17 +645,78 @@ class TaskCard(QFrame):
     def _rollback_coin(self) -> None:
         self._coin_syncing = True
         try:
-            persisted = bool(
-                self._callbacks.get("is_coin_favorite", lambda _tid: False)(self._task.id)
-            )
             with QSignalBlocker(self._coin_btn):
-                self._coin_btn.setChecked(persisted)
+                self._coin_btn.setChecked(self._task.coin_favorite)
         finally:
             self._coin_syncing = False
         self._coin_pending_value = self._coin_btn.isChecked()
         self._refresh_coin_icon()
         self._set_coin_pending(False)
         self._set_coin_in_flight(False)
+
+    def _refresh_dot_icon(self) -> None:
+        checked = self._dot_btn.isChecked()
+        svg = DOT_FILLED_SVG if checked else DOT_OUTLINE_SVG
+        opacity = _STAR_PENDING_OPACITY if self._dot_pending else 1.0
+        self._dot_btn.setIcon(svg_to_icon(svg, 16, opacity))
+        self._dot_btn.setAccessibleDescription(
+            "Bolinha favorita" if checked else "Bolinha não favorita"
+        )
+
+    def _set_dot_pending(self, pending: bool) -> None:
+        self._dot_pending = pending
+        self._refresh_dot_icon()
+        self._dot_btn.setToolTip("Salvando bolinha..." if pending else "Favoritar com bolinha")
+
+    def _set_dot_in_flight(self, in_flight: bool) -> None:
+        self._dot_in_flight = in_flight
+        self._dot_btn.setEnabled(not in_flight)
+        if in_flight:
+            self._dot_watchdog.start()
+        else:
+            self._dot_watchdog.stop()
+
+    def _on_dot_watchdog_fired(self) -> None:
+        if not self._dot_in_flight:
+            return
+        _log.error(
+            "dot.autosave_watchdog_timeout: request in-flight nao resolveu "
+            "em %d ms; forcando rollback da bolinha (task_id=%s)",
+            _STAR_IN_FLIGHT_WATCHDOG_MS,
+            self._task.id,
+        )
+        self._rollback_dot()
+
+    def _on_dot_toggled(self, checked: bool) -> None:
+        if self._dot_syncing or self._dot_in_flight:
+            return
+        self._dot_pending_value = checked
+        self._refresh_dot_icon()
+        self._set_dot_pending(True)
+        self._dot_debounce.start()
+
+    def _on_dot_debounce_fired(self) -> None:
+        self._set_dot_in_flight(True)
+        cb = self._callbacks.get("on_dot_toggle")
+        if cb is None:
+            self._rollback_dot()
+            return
+        ok = cb(self._task, self._dot_pending_value)
+        if ok:
+            return
+        self._rollback_dot()
+
+    def _rollback_dot(self) -> None:
+        self._dot_syncing = True
+        try:
+            with QSignalBlocker(self._dot_btn):
+                self._dot_btn.setChecked(self._task.dot_favorite)
+        finally:
+            self._dot_syncing = False
+        self._dot_pending_value = self._dot_btn.isChecked()
+        self._refresh_dot_icon()
+        self._set_dot_pending(False)
+        self._set_dot_in_flight(False)
 
     def _rollback_star(self) -> None:
         """Reverte a estrela ao valor persistido da task, sem disparar autosave."""
@@ -645,14 +778,15 @@ class TaskCard(QFrame):
             f"background: {style['hover']};"
             "}"
             "QToolButton#cardActionEdit, QToolButton#cardActionDelete, "
-            "QToolButton#cardActionPrepare {"
+            "QToolButton#cardActionPrepare, QToolButton#cardActionPasteWorkspace {"
             "background: rgba(5,6,8,0.72);"
             "border: 1px solid rgba(255,255,255,0.18);"
             "border-radius: 8px;"
             "padding: 2px;"
             "}"
             "QToolButton#cardActionEdit:hover, QToolButton#cardActionDelete:hover, "
-            "QToolButton#cardActionPrepare:hover {"
+            "QToolButton#cardActionPrepare:hover, "
+            "QToolButton#cardActionPasteWorkspace:hover {"
             "background: rgba(255,255,255,0.18);"
             "border: 1px solid rgba(255,255,255,0.42);"
             "}"
@@ -724,6 +858,7 @@ class TaskCard(QFrame):
     def _set_hover_actions_visible(self, visible: bool) -> None:
         if self._has_active_schedule and self._task.permanente:
             self._actions_row.setVisible(True)
+            self._paste_btn.setVisible(visible)
             self._edit_btn.setVisible(visible)
             self._delete_btn.setVisible(visible)
             self._schedule_btn.setVisible(True)
@@ -731,10 +866,53 @@ class TaskCard(QFrame):
         else:
             self._actions_row.setVisible(visible)
             if visible:
+                self._paste_btn.setVisible(True)
                 self._edit_btn.setVisible(True)
                 self._delete_btn.setVisible(True)
                 self._schedule_btn.setVisible(self._task.permanente)
                 self._prepare_btn.setVisible(self._prepare_allowed())
+
+    def _handle_paste_workspace_root(self) -> None:
+        """Cola o workspace_root da task na janela focada 2s depois.
+
+        Espelha o markdown-external-paste-button: serve o texto no clipboard e
+        dispara o atalho de paste na janela que estiver com foco, dando 2s para
+        o usuario focar o destino (terminal, editor, etc).
+        """
+        from task_manager_desktop.ui import external_paste
+
+        text = (getattr(self._task, "workspace_root", "") or "").strip()
+        if not text:
+            self._show_paste_warning("Sem workspace root configurado para esta task.")
+            return
+        self._paste_btn.setEnabled(False)
+        QTimer.singleShot(
+            external_paste.EXTERNAL_PASTE_DELAY_MS,
+            self,
+            lambda captured=text: self._do_paste_workspace_root(captured),
+        )
+
+    def _do_paste_workspace_root(self, text: str) -> None:
+        from task_manager_desktop.ui import external_paste
+
+        self._paste_btn.setEnabled(True)
+        shortcut = external_paste.detect_paste_shortcut()
+        external_paste.paste_text_to_focused_window(
+            text,
+            shortcut,
+            owner=self,
+            on_warning=self._show_paste_warning,
+        )
+
+    def _show_paste_warning(self, message: str) -> None:
+        try:
+            from task_manager_desktop.ui.toast import ToastWidget
+
+            top = self.window()
+            if isinstance(top, QWidget):
+                ToastWidget(top).show_message(message)
+        except Exception:  # noqa: BLE001 - aviso best-effort; nunca derruba o paste
+            pass
 
     def _handle_edit(self) -> None:
         cb = self._callbacks.get("on_edit")
@@ -776,7 +954,9 @@ class TaskCard(QFrame):
         """
         if selected:
             glow = QGraphicsDropShadowEffect(self)
-            glow.setBlurRadius(20)
+            # Sombra branca com o dobro da largura (blur 20 -> 40) para um halo
+            # mais evidente no card selecionado.
+            glow.setBlurRadius(40)
             glow.setColor(QColor(255, 255, 255, 180))
             glow.setOffset(0, 0)
             self.setGraphicsEffect(glow)
@@ -850,6 +1030,10 @@ class TaskCard(QFrame):
         self._content_col.setProperty("testid", f"task-card-{task.id}-content")
         self._status_col.setProperty("testid", f"task-card-{task.id}-status-column")
         self._actions_row.setProperty("testid", f"task-card-{task.id}-actions")
+        self._paste_btn.setProperty("testid", f"task-card-{task.id}-paste-workspace")
+        self._paste_btn.setAccessibleName(
+            f"Colar workspace root da task {task.id} na janela focada"
+        )
         self._edit_btn.setProperty("testid", f"task-card-{task.id}-edit")
         self._edit_btn.setAccessibleName(f"Editar task {task.id}")
         self._schedule_btn.setProperty("testid", f"task-card-{task.id}-schedule")
@@ -860,26 +1044,31 @@ class TaskCard(QFrame):
         self._title_edit.setProperty("testid", f"task-card-{task.id}-title-edit")
         self._star_btn.setProperty("testid", f"task-card-{task.id}-favorito")
         self._coin_btn.setProperty("testid", f"task-card-{task.id}-favorito-moeda")
+        self._dot_btn.setProperty("testid", f"task-card-{task.id}-favorito-bolinha")
         self._id_label.setText(f"#{task.id}")
         # Re-sincroniza a estrela com a task recarregada sem disparar autosave
         # e cancela qualquer debounce/lockout pendente do estado anterior.
         self._fav_debounce.stop()
         self._coin_debounce.stop()
+        self._dot_debounce.stop()
         self._fav_pending_value = task.favorito
         with QSignalBlocker(self._star_btn):
             self._star_btn.setChecked(task.favorito)
         self._refresh_star_icon()
         self._set_star_pending(False)
         self._set_star_in_flight(False)
-        coin_saved = bool(
-            self._callbacks.get("is_coin_favorite", lambda _tid: False)(task.id)
-        )
-        self._coin_pending_value = coin_saved
+        self._coin_pending_value = task.coin_favorite
         with QSignalBlocker(self._coin_btn):
-            self._coin_btn.setChecked(coin_saved)
+            self._coin_btn.setChecked(task.coin_favorite)
         self._refresh_coin_icon()
         self._set_coin_pending(False)
         self._set_coin_in_flight(False)
+        self._dot_pending_value = task.dot_favorite
+        with QSignalBlocker(self._dot_btn):
+            self._dot_btn.setChecked(task.dot_favorite)
+        self._refresh_dot_icon()
+        self._set_dot_pending(False)
+        self._set_dot_in_flight(False)
         self._refresh_text_content()
         self._seg_ctrl.update_task(task, self._all_tasks)
         self._apply_card_style()

@@ -30,6 +30,10 @@ class TestSchemaV1Tabela:
             # v8: flag manual do setor "Em preparação"
             "em_preparacao",
             # v10 dropou a coluna `type` (o tipo migrou para as subtasks).
+            # v11: workspace_root do repositorio SystemForge da task.
+            "workspace_root",
+            # v12: marcadores de ranqueamento persistidos (moeda + bolinha).
+            "coin_favorite", "dot_favorite",
         }
         assert cols == expected
 
@@ -66,8 +70,8 @@ class TestRunMigracoesIdempotente:
         run_migrations(mem)
         run_migrations(mem)
         count = mem.execute("SELECT COUNT(*) FROM _schema_version").fetchone()[0]
-        # v10: drop da coluna `type` de tasks.
-        assert count == 10
+        # v12: colunas coin_favorite + dot_favorite (ultima migracao aplicada).
+        assert count == 12
 
 
 class TestCheckConstraintStatus:

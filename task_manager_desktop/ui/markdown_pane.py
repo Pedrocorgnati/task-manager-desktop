@@ -21,6 +21,10 @@ from task_manager_desktop.core.exceptions import TaskNotFoundError
 from task_manager_desktop.ui import external_paste
 from task_manager_desktop.ui.editor_toolbar import EditorToolbar
 from task_manager_desktop.ui.markdown_editor import MarkdownEditor
+from task_manager_desktop.ui.markdown_find import (
+    FindBar,
+    select_word_or_next_occurrence,
+)
 from task_manager_desktop.ui.markdown_viewer import MarkdownViewer
 
 if TYPE_CHECKING:
@@ -134,10 +138,15 @@ class MarkdownPane(QWidget):
         self._stack.addWidget(self._viewer)   # index 0
         self._stack.addWidget(self._editor)   # index 1
 
+        # Barra de busca (Ctrl+F) — oculta ate ser aberta; opera sobre o widget
+        # de texto ativo do stack (editor ou viewer).
+        self._find_bar = FindBar(self)
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
         outer.addWidget(self._toolbar)
+        outer.addWidget(self._find_bar)
         outer.addWidget(self._stack, 1)
 
         # Wire-up
@@ -153,6 +162,19 @@ class MarkdownPane(QWidget):
         self._save_shortcut = QShortcut(QKeySequence("Ctrl+S"), self._editor)
         self._save_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         self._save_shortcut.activated.connect(self._save)
+
+        # Ctrl+F: localizar texto. Ctrl+D: selecionar palavra / proxima igual.
+        # Ambos atuam sobre o widget de texto ativo (editor ou viewer) enquanto
+        # o foco estiver dentro da pane (WidgetWithChildrenShortcut).
+        self._find_shortcut = QShortcut(QKeySequence.StandardKey.Find, self)
+        self._find_shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        self._find_shortcut.activated.connect(self._open_find)
+
+        self._select_word_shortcut = QShortcut(QKeySequence("Ctrl+D"), self)
+        self._select_word_shortcut.setContext(
+            Qt.ShortcutContext.WidgetWithChildrenShortcut
+        )
+        self._select_word_shortcut.activated.connect(self._select_next_occurrence)
 
         self._apply_reader_theme()
         self.set_task(None)
@@ -317,6 +339,25 @@ class MarkdownPane(QWidget):
     @property
     def external_paste_button(self) -> QPushButton:
         return self._external_paste_button
+
+    # ------------------------------------------------------------------
+    # Find / select-word (Ctrl+F / Ctrl+D)
+    # ------------------------------------------------------------------
+    def _active_text_widget(self):  # noqa: ANN202
+        """Widget de texto Qt atualmente visivel no stack (editor ou viewer).
+
+        Editor e viewer expoem a mesma API de QTextCursor (find/textCursor),
+        entao a FindBar e o Ctrl+D operam indistintamente sobre qualquer um.
+        """
+        if self._stack.currentIndex() == self._IDX_EDITOR:
+            return self._editor
+        return self._viewer._browser
+
+    def _open_find(self) -> None:
+        self._find_bar.open_with_selection(self._active_text_widget())
+
+    def _select_next_occurrence(self) -> None:
+        select_word_or_next_occurrence(self._active_text_widget())
 
     # ------------------------------------------------------------------
     # Internal transitions

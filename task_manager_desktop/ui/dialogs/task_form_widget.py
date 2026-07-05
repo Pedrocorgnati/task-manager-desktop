@@ -20,6 +20,8 @@ from task_manager_desktop.ui.icons import (
     CLOCK_SVG,
     COIN_FILLED_SVG,
     COIN_OUTLINE_SVG,
+    DOT_FILLED_SVG,
+    DOT_OUTLINE_SVG,
     STAR_FILLED_SVG,
     STAR_OUTLINE_SVG,
     STRATEGY_SVG,
@@ -184,6 +186,7 @@ class TaskFormWidget(QWidget):
         if initial is not None:
             self._prefill(initial)
         self.title_input.textChanged.connect(self.clear_title_error)
+        self.workspace_root_input.textChanged.connect(self.clear_workspace_root_error)
 
     def _build_ui(self) -> None:
         layout = QVBoxLayout(self)
@@ -215,11 +218,43 @@ class TaskFormWidget(QWidget):
         self.deps_input.setProperty("mono", True)
         layout.addWidget(self.deps_input)
 
+        # ── Workspace root ────────────────────────────────────────────────
+        # Caminho do workspace do repositorio SystemForge desta task. Campo
+        # obrigatorio: o botao de play do card cola este valor na janela focada.
+        layout.addWidget(self._field_label("Workspace root"))
+        self.workspace_root_input = QLineEdit(self)
+        self.workspace_root_input.setPlaceholderText("output/workspace/nome-do-sistema")
+        self.workspace_root_input.setAccessibleName("Workspace root do repositório SystemForge")
+        self.workspace_root_input.setAccessibleDescription("Obrigatório")
+        self.workspace_root_input.setProperty("testid", "task-form-workspace-root")
+        self.workspace_root_input.setProperty("mono", True)
+        layout.addWidget(self.workspace_root_input)
+
+        self._workspace_root_error = QLabel("Workspace root obrigatório", self)
+        self._workspace_root_error.setObjectName("fieldErrorLabel")
+        self._workspace_root_error.setProperty("testid", "task-form-workspace-root-error")
+        self._workspace_root_error.hide()
+        layout.addWidget(self._workspace_root_error)
+
         # ── Favoritos ─────────────────────────────────────────────────────
         layout.addWidget(self._field_label("Favoritos"))
         fav_row = QHBoxLayout()
         fav_row.setContentsMargins(0, 0, 0, 0)
         fav_row.setSpacing(8)
+
+        self._dot_pill = _TogglePill(
+            outline_svg=DOT_OUTLINE_SVG,
+            filled_svg=DOT_FILLED_SVG,
+            label="Marcador",
+            active_bg="rgba(96,165,250,0.12)",
+            active_border="#60A5FA",
+            active_color="#93C5FD",
+            parent=self,
+        )
+        self._dot_pill.setObjectName("taskFormDotFavorito")
+        self._dot_pill.setProperty("testid", "task-form-dot-favorito")
+        self._dot_pill.setAccessibleName("Marcar task com bolinha")
+        self._dot_pill.setToolTip("Marcadores aparecem no topo do setor")
 
         self._star_pill = _TogglePill(
             outline_svg=STAR_OUTLINE_SVG,
@@ -263,6 +298,7 @@ class TaskFormWidget(QWidget):
         self._permanent_pill.setAccessibleName("Marcar task como permanente")
         self._permanent_pill.setToolTip("Tasks permanentes não somem ao concluir")
 
+        fav_row.addWidget(self._dot_pill)
         fav_row.addWidget(self._star_pill)
         fav_row.addWidget(self._coin_pill)
         fav_row.addWidget(self._permanent_pill)
@@ -440,7 +476,10 @@ class TaskFormWidget(QWidget):
     def _prefill(self, task: Task) -> None:
         self.title_input.setText(task.title)
         self.deps_input.setText(", ".join(task.deps))
+        self.workspace_root_input.setText(getattr(task, "workspace_root", "") or "")
         self._star_pill.setChecked(bool(task.favorito))
+        self._coin_pill.setChecked(bool(getattr(task, "coin_favorite", False)))
+        self._dot_pill.setChecked(bool(getattr(task, "dot_favorite", False)))
         self._permanent_pill.setChecked(bool(task.permanente))
 
     def get_data(self) -> dict[str, Any]:
@@ -458,9 +497,11 @@ class TaskFormWidget(QWidget):
         return {
             "title": self.title_input.text().strip(),
             "deps": parse_deps(self.deps_input.text()),
+            "workspace_root": self.workspace_root_input.text().strip(),
             "favorito": self._star_pill.isChecked(),
             "permanente": self._permanent_pill.isChecked(),
             "coin_favorite": self._coin_pill.isChecked(),
+            "dot_favorite": self._dot_pill.isChecked(),
             "status": status,
             "em_preparacao": em_preparacao,
             "subtasks": self._collect_subtasks(),
@@ -481,6 +522,10 @@ class TaskFormWidget(QWidget):
             self.mark_title_invalid()
             return False
         self.clear_title_error()
+        if not self.workspace_root_input.text().strip():
+            self.mark_workspace_root_invalid()
+            return False
+        self.clear_workspace_root_error()
         return True
 
     def mark_title_invalid(self) -> None:
@@ -499,3 +544,20 @@ class TaskFormWidget(QWidget):
         self.title_input.style().polish(self.title_input)
         self._title_error.hide()
         self.title_input.setToolTip("")
+
+    def mark_workspace_root_invalid(self) -> None:
+        self.workspace_root_input.setProperty("invalid", True)
+        self.workspace_root_input.setProperty("class", "field-error")
+        self.workspace_root_input.style().unpolish(self.workspace_root_input)
+        self.workspace_root_input.style().polish(self.workspace_root_input)
+        self._workspace_root_error.show()
+        self.workspace_root_input.setToolTip("Workspace root obrigatório")
+        self.workspace_root_input.setFocus()
+
+    def clear_workspace_root_error(self) -> None:
+        self.workspace_root_input.setProperty("invalid", None)
+        self.workspace_root_input.setProperty("class", None)
+        self.workspace_root_input.style().unpolish(self.workspace_root_input)
+        self.workspace_root_input.style().polish(self.workspace_root_input)
+        self._workspace_root_error.hide()
+        self.workspace_root_input.setToolTip("")

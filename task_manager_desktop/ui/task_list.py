@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QToolButton,
@@ -79,6 +80,12 @@ _ROLE_TASK_ID = Qt.ItemDataRole.UserRole + 2  # str task id
 _ROLE_SECTOR = Qt.ItemDataRole.UserRole + 3  # Sector.value int
 _TYPE_ACTIVE_COLLAPSE_TOGGLE = "active-collapse-toggle"
 
+# Setores recolhidos pelo chevron de colapso: tudo de "Fila" para baixo. "Em
+# execução" e "Em preparação" permanecem sempre visiveis quando colapsado.
+_COLLAPSIBLE_SECTORS = frozenset(
+    {Sector.WAITING, Sector.BLOCKED, Sector.DONE, Sector.PERMANENT}
+)
+
 _SECTOR_COLORS = {
     Sector.ACTIVE: "#22C55E",
     Sector.EM_PREPARACAO: "#86EFAC",
@@ -89,18 +96,23 @@ _SECTOR_COLORS = {
 }
 
 
-def sort_sector_tasks(tasks: list[Task], coin_favorites: dict[str, bool] | None = None) -> list[Task]:
+def sort_sector_tasks(tasks: list[Task]) -> list[Task]:
     """Ordem determinista das tasks de um setor.
 
     Funcao pura: `(favorito DESC, order_index ASC, id ASC)` (source.md AC-13).
     Favoritos ficam no topo; o `id` como ultimo criterio garante que duas
-    execucoes sobre a mesma entrada produzam exatamente a mesma ordem.
+    execucoes sobre a mesma entrada produzam exatamente a mesma ordem. O score
+    de ranqueamento soma os tres marcadores persistidos (estrela + moeda +
+    bolinha), cada um com peso 1.
     """
-    coin_favorites = coin_favorites or {}
     return sorted(
         tasks,
         key=lambda t: (
-            -(int(bool(t.favorito)) + int(bool(coin_favorites.get(t.id, False)))),
+            -(
+                int(bool(t.favorito))
+                + int(bool(getattr(t, "coin_favorite", False)))
+                + int(bool(getattr(t, "dot_favorite", False)))
+            ),
             not t.favorito,
             t.order_index,
             t.id,
@@ -408,7 +420,7 @@ class TaskList(QWidget):
         self._main_window: QWidget | None = None
         self._task_types: frozenset[str] = ALL_TASK_TYPES
         self._active_only_collapsed = False
-        self._coin_favorites: dict[str, bool] = {}
+        self._search_text = ""
         # Overlay ancorado no canto inferior direito (ver attach_test_mode_grid).
         self._test_mode_grid: QWidget | None = None
 
@@ -419,9 +431,27 @@ class TaskList(QWidget):
         self._header_host = QWidget(self)
         self._header_host.setObjectName("taskListHeaderHost")
         self._header_host.setProperty("testid", "task-list-header-host")
-        self._header_layout = QHBoxLayout(self._header_host)
-        self._header_layout.setContentsMargins(10, 6, 10, 6)
+        # Layout vertical: primeira linha com os itens existentes do header
+        # (set_header_widget), segunda linha com o input de busca.
+        header_outer = QVBoxLayout(self._header_host)
+        header_outer.setContentsMargins(10, 6, 10, 6)
+        header_outer.setSpacing(6)
+
+        self._header_layout = QHBoxLayout()
+        self._header_layout.setContentsMargins(0, 0, 0, 0)
         self._header_layout.setSpacing(0)
+        header_outer.addLayout(self._header_layout)
+
+        # Linha de baixo: input de busca que filtra os cards por texto (titulo
+        # ou id da task). Vive dentro do task-list-header-host.
+        self._search_input = QLineEdit(self._header_host)
+        self._search_input.setObjectName("taskSearchInput")
+        self._search_input.setProperty("testid", "task-list-search-input")
+        self._search_input.setPlaceholderText("Buscar tasks...")
+        self._search_input.setClearButtonEnabled(True)
+        self._search_input.textChanged.connect(self._on_search_text_changed)
+        header_outer.addWidget(self._search_input)
+
         self._layout.addWidget(self._header_host)
 
         self._empty_label = QLabel(
@@ -445,6 +475,7 @@ class TaskList(QWidget):
         self._layout.addWidget(self._empty_filter_label)
 
         self._inner = _InnerList(self)
+        self._inner.itemSelectionChanged.connect(self._update_selection_glow)
         self._layout.addWidget(self._inner)
 
     # ------------------------------------------------------------------
@@ -547,6 +578,27 @@ class TaskList(QWidget):
                 card._task = dataclasses.replace(card._task, notes=notes)
                 break
 
+    def _on_search_text_changed(self, text: str) -> None:
+        self._search_text = text.strip().casefold()
+        self._rebuild(self._tasks)
+
+    def _matches_search(self, task: Task) -> bool:
+        if not self._search_text:
+            return True
+        haystack = f"{task.title} {task.id}".casefold()
+        return self._search_text in haystack
+
+    def _update_selection_glow(self) -> None:
+        """Aplica o halo branco no card atualmente selecionado e o remove dos
+        demais, para sinalizar visualmente qual task esta selecionada."""
+        from task_manager_desktop.ui.task_card import TaskCard
+
+        selected = self.get_selected_task()
+        selected_id = selected.id if selected is not None else None
+        for card in self._cards:
+            if isinstance(card, TaskCard):
+                card.set_selected(card._task.id == selected_id)
+
     def set_filters(
         self,
         task_types: Iterable[str | TaskType] | None = None,
@@ -563,12 +615,6 @@ class TaskList(QWidget):
         task_types: Iterable[str | TaskType] | None = None,
     ) -> None:
         self.set_filters(task_types=task_types)
-
-    def set_coin_favorite(self, task_id: str, value: bool) -> None:
-        self._coin_favorites[task_id] = bool(value)
-
-    def is_coin_favorite(self, task_id: str) -> bool:
-        return bool(self._coin_favorites.get(task_id, False))
 
     def has_selection(self) -> bool:
         return self.get_selected_task() is not None
@@ -687,8 +733,14 @@ class TaskList(QWidget):
         else:
             visible_tasks = list(tasks)
 
+        # Filtro de busca textual (input do header): aplicado sobre o resultado
+        # do filtro de tipo. Casa por titulo ou id da task.
+        search_active = bool(self._search_text)
+        if search_active:
+            visible_tasks = [t for t in visible_tasks if self._matches_search(t)]
+
         # CL-030: banco vazio exibe 4 headers + placeholder; empty_label so para "sem resultados de filtro"
-        filter_no_match = filter_active and not visible_tasks
+        filter_no_match = (filter_active or search_active) and not visible_tasks
 
         self._empty_label.setVisible(False)
         self._empty_filter_label.setVisible(filter_no_match)
@@ -702,13 +754,20 @@ class TaskList(QWidget):
             groups[_task_sector(task, all_tasks)].append(task)
         # Ordem determinista por setor: favorito DESC, order_index ASC, id ASC.
         for sector_key in groups:
-            groups[sector_key] = sort_sector_tasks(groups[sector_key], self._coin_favorites)
+            groups[sector_key] = sort_sector_tasks(groups[sector_key])
+
+        # O chevron de colapso vive logo abaixo da ultima categoria sempre-visivel
+        # presente: "Em preparação" quando ha tasks nela, senao "Em execução".
+        # Assim o colapso recolhe apenas de "Fila" para baixo.
+        collapse_anchor = (
+            Sector.EM_PREPARACAO if groups[Sector.EM_PREPARACAO] else Sector.ACTIVE
+        )
 
         for sector in _SECTOR_ORDER:
             sector_tasks = groups[sector]
-            if self._active_only_collapsed and sector != Sector.ACTIVE:
+            if self._active_only_collapsed and sector in _COLLAPSIBLE_SECTORS:
                 continue
-            if filter_active and not sector_tasks:
+            if (filter_active or search_active) and not sector_tasks:
                 continue
             # O setor Permanentes nao e um setor-base sempre visivel: so
             # aparece quando ha tasks permanentes concluidas. Um header
@@ -725,8 +784,12 @@ class TaskList(QWidget):
             else:
                 for task in sector_tasks:
                     self._add_task_item(task, tasks, all_tasks, sector)
-            if sector == Sector.ACTIVE and sector_tasks:
-                self._add_active_collapse_toggle()
+            if sector == collapse_anchor and sector_tasks:
+                self._add_active_collapse_toggle(collapse_anchor)
+
+        # Reaplica o halo branco apos reconstruir os cards (clear() perdeu o
+        # estado visual; a selecao do QListWidget pode persistir).
+        self._update_selection_glow()
 
     def _add_separator(self, sector: Sector) -> None:
         item = QListWidgetItem(_SECTOR_LABELS[sector])
@@ -760,10 +823,10 @@ class TaskList(QWidget):
 
         self._inner.setItemWidget(item, row)
 
-    def _add_active_collapse_toggle(self) -> None:
+    def _add_active_collapse_toggle(self, sector: Sector = Sector.ACTIVE) -> None:
         item = QListWidgetItem()
         item.setData(_ROLE_TYPE, _TYPE_ACTIVE_COLLAPSE_TOGGLE)
-        item.setData(_ROLE_SECTOR, Sector.ACTIVE.value)
+        item.setData(_ROLE_SECTOR, sector.value)
         item.setFlags(Qt.ItemFlag.ItemIsEnabled)
         item.setSizeHint(QSize(1, 28))
         self._inner.addItem(item)
@@ -782,12 +845,12 @@ class TaskList(QWidget):
         button.setAccessibleName(
             "Mostrar todos os setores"
             if self._active_only_collapsed
-            else "Mostrar apenas tasks em execução"
+            else "Recolher Fila e setores abaixo"
         )
         button.setToolTip(
             "Mostrar todos os setores"
             if self._active_only_collapsed
-            else "Mostrar apenas tasks em execução"
+            else "Recolher Fila e setores abaixo"
         )
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.clicked.connect(self._toggle_active_only_collapsed)

@@ -56,6 +56,7 @@ def test_create_dialog_stays_open_on_io_error(_setup, monkeypatch, qtbot):
     qtbot.addWidget(dialog)
     dialog.submit_handler = lambda data: ctrl._persist(data, tl)
     dialog.form.title_input.setText("Will fail")
+    dialog.form.workspace_root_input.setText("output/workspace/will-fail")
 
     dialog._on_accept()
 
@@ -71,7 +72,7 @@ def test_edit_dialog_stays_open_on_io_error(_setup, monkeypatch, qtbot):
     """US-020 c3: EditTaskDialog permanece aberto + Salvar reabilitado quando repo.update levanta sqlite3.Error."""
     repo, conn, tl, db_path = _setup
 
-    task = Task(id="t1", title="Original", deps=[])
+    task = Task(id="t1", title="Original", deps=[], workspace_root="output/workspace/original")
     repo.create(task)
 
     from task_manager_desktop.controllers import edit_task_controller as mod
